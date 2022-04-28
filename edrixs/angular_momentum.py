@@ -1,7 +1,8 @@
 __all__ = ['get_ladd', 'get_lminus', 'get_lx', 'get_ly', 'get_lz', 'get_orb_momentum',
            'get_pauli', 'get_sx', 'get_sy', 'get_sz', 'get_spin_momentum', 'euler_to_rmat',
            'rmat_to_euler', 'where_is_angle', 'dmat_spinor', 'zx_to_rmat', 'get_wigner_dmat',
-           'cf_cubic_d', 'cf_tetragonal_d', 'cf_square_planar_d', 'cf_trigonal_t2g']
+           'cf_cubic_d', 'cf_tetragonal_d', 'cf_square_planar_d', 'cf_trigonal_t2g',
+           'cf_stevens']
 
 import numpy as np
 from .basis_transform import cb_op, tmat_r2c
@@ -763,3 +764,94 @@ def cf_tetragonal_t2g(ten_dq, d1, d3):
     cf[1:6:2, 1:6:2] += tmp
     cf[:, :] = cb_op(cf, tmat_r2c('t2g', True))
     return cf
+
+
+def cf_stevens(ll, B20=0, B22=0, B34=0, B40=0, B42=0,
+               B44=0, B60=0, B64=0, ispin=False):
+    """
+    Given the Stevens parameters return the crystal field matrix
+    for d orbitals in the complex harmonics basis.
+
+    Parameters
+    ----------
+    ll : int
+        Orbital angular momentum
+    B20: float scalar
+        B20 Stevens parameter
+    B22: float scalar
+        B22 Stevens parameter
+    B34: float scalar
+        B34 Stevens parameter
+    B40: float scalar
+        B40 Stevens parameter
+    B42: float scalar
+        B42 Stevens parameter
+    B44: float scalar
+        B44 Stevens parameter
+    B60: float scalar
+        B60 Stevens parameter
+    B64: float scalar
+        B64 Stevens parameter
+
+    Returns
+    -------
+    cf: 2d complex array, shape=(N, N)
+        The matrix form of crystal field Hamiltonian in the complex harmonics basis.
+        Where N = 2*l+1 or 4*l+2 depending on ispin.
+
+    Notes
+    -----
+    See appendix B of Ref. [1]_ for further details.
+
+    References
+    ----------
+    .. [1] R. O. Kuzian, O. Janson, A. Savoyant, Jeroen van den Brink, and R. Hayn
+           `Phys. Rev. B 104, 085154 (2021) <https://doi.org/10.1103/PhysRevB.104.085154>`_
+    """
+    lz = get_lz(ll, ispin=ispin)
+    ladd = get_ladd(ll, ispin=ispin)
+    lminus = get_lminus(ll, ispin=ispin)
+
+    lz2 = np.linalg.matrix_power(lz, 2)
+    lz4 = np.linalg.matrix_power(lz, 4)
+    lz6 = np.linalg.matrix_power(lz, 6)
+
+    ladd2 = np.linalg.matrix_power(ladd, 2)
+    ladd3 = np.linalg.matrix_power(ladd, 3)
+    ladd4 = np.linalg.matrix_power(ladd, 4)
+
+    lminus2 = np.linalg.matrix_power(lminus, 2)
+    lminus3 = np.linalg.matrix_power(lminus, 3)
+    lminus4 = np.linalg.matrix_power(lminus, 4)
+
+    ID = np.identity(2*ll + 1)
+
+    O20 = 3*lz2 - ll*(ll + 1)*ID
+    O22 = 1/2*(ladd2 + lminus2)
+
+    O42_part1 = np.matmul(7*lz2 - ll*(ll + 1)*ID - 5*ID, 2*O22)
+    O42_part2 = np.matmul(2*O22, 7*lz2 - ll*(ll + 1)*ID - 5*ID)
+    O42 = 1/4*(O42_part1 + O42_part2)
+
+    O40 = (35*lz4 - 30*ll*(ll + 1)*lz2 + 25*lz2
+           - 6*ll*(ll + 1)*ID + 3*ll**2*(ll + 1)**2*ID)
+
+    O44 = 1/2*(ladd4 + lminus4)
+
+    O34 = 1/4*(np.matmul(lz, ladd3 + lminus3)
+               + np.matmul(ladd3 + lminus3, lz))
+
+    O60 = (231*lz6 - 315*ll*(ll + 1)*lz4 + 735*lz4
+           + 105*ll**2*(ll + 1)**2*lz2 - 525*ll*(ll + 1)
+           + 294*lz2 - 5*ll**3*(ll + 1)**3*ID + 40*ll**2*(ll + 1)**2*ID
+           - 60*ll*(ll + 1))
+
+    O64part1 = (11*lz2 - ll*(ll + 1)*ID - 38*ID)*(ladd4 + lminus4)
+    O64part2 = (ladd4 + lminus4)*(11*lz2 - ll*(ll + 1)*ID - 38*ID)
+
+    O64 = (O64part1 + O64part2)/4
+
+    cfstevens = (B20*O20 + B22*O22 + B34*O34 + B40*O40 + B42*O42
+                 + B44*O44 + B60*O60 + B64*O64)
+
+    return cfstevens
