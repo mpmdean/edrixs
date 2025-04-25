@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 __all__ = ['combination', 'fock_bin', 'get_fock_bin_by_N', 'get_fock_half_N',
-           'get_fock_full_N', 'get_fock_basis_by_NLz', 'get_fock_basis_by_NSz',
+           'get_fock_full_N', 'get_fock_full_N_fast',
+           'get_fock_basis_by_NLz', 'get_fock_basis_by_NSz',
            'get_fock_basis_by_NJz', 'get_fock_basis_by_N_abelian',
            'get_fock_basis_by_N_LzSz', 'write_fock_dec_by_N']
 
