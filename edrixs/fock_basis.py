@@ -220,6 +220,63 @@ def get_fock_full_N(norb, N):
     return res
 
 
+def get_fock_full_N_fast(N: int, r: int):
+    """
+    Get the decimal digitals to represent Fock states via a fast
+    Gosper’s hack method. This is a fast version of get_fock_full_N.
+
+    Parameters
+    ----------
+    norb: int
+        Number of orbitals.
+    N: int
+        Number of occupancy.
+
+    Returns
+    -------
+    res: list of int
+        The decimal digitals to represent Fock states.
+
+    Examples
+    --------
+    >>> import edrixs
+    >>> edrixs.fock_bin(4,2)
+    [[1, 1, 0, 0],
+     [1, 0, 1, 0],
+     [0, 1, 1, 0],
+     [1, 0, 0, 1],
+     [0, 1, 0, 1],
+     [0, 0, 1, 1]]
+
+    >>> import edrixs
+    >>> edrixs.get_fock_full_N_fast(4,2)
+    [3, 5, 6, 9, 10, 12]
+
+    """
+    if r < 0:
+        raise Exception("r must be > 0")
+    if r > N:
+        raise Exception("r cannot exceed N")
+
+    all_ones = (1 << N) - 1
+
+    # start y as the r-complement pattern with (N-r) ones:
+    y = (1 << (N - r)) - 1
+    limit = 1 << N
+
+    result = []
+    while y < limit:
+        # flip back to get an r‐popcount pattern in descending order
+        result.append(all_ones ^ y)
+
+        # Gosper’s hack on y to get next higher (N-r)-popcount pattern
+        c = y & -y
+        yc = y + c
+        y = (((yc ^ y) >> 2) // c) | yc
+
+    return result
+
+
 def get_fock_basis_by_NLz(norb, N, lz_list):
     """
     Get decimal digitals to represent Fock states, use good quantum number:
