@@ -16,7 +16,6 @@ def binary_from_full(norb, N):
 def test_fast_fock_compare():
     """Confirm that fast version of the function behaves
     the same as the more easily interpretable slow version."""
-    norb = 5
-    for N in [0, 3]:
-        assert (sorted(edrixs.get_fock_full_N(norb, N))
-                == sorted(binary_from_full(norb, N)))
+    for norb in [10, 15, 20]:
+        assert (sorted(edrixs.get_fock_full_N(norb, norb - 5))
+                == sorted(binary_from_full(norb, norb - 5)))
