@@ -43,7 +43,7 @@ def get_fock_full_N_old(norb, N):
 
 
 def test_old_new():
-    for norb in [6, 8, 10]: # only test even norb
+    for norb in [6, 8, 10]:  # only test even norb
         N = norb - 3
         assert (sorted(get_fock_full_N_old(norb, N)) ==
                 sorted(edrixs.get_fock_full_N(norb, N)))
