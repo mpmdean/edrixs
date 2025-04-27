@@ -1,10 +1,21 @@
 import edrixs
 
 
-def test_fast_fock():
+def test_fock():
     """Confirm that fast version of the function behaves
     the same as the more easily interpretable slow version."""
-    N = 5
-    r = 3
-    assert (edrixs.get_fock_full_N_fast(N, r)
-            == edrixs.get_fock_full_N(N, r))
+    assert edrixs.get_fock_full_N(4, 2) == [3, 5, 6, 9, 10, 12]
+
+
+def binary_from_full(norb, N):
+    return [int(''.join(str(b) for b in binary), 2)
+            for binary in edrixs.fock_bin(norb, N)]
+
+
+def test_fast_fock_compare():
+    """Confirm that fast version of the function behaves
+    the same as the more easily interpretable slow version."""
+    norb = 5
+    for N in [0, 3]:
+        assert (sorted(edrixs.get_fock_full_N(norb, N))
+                == sorted(binary_from_full(norb, N)))

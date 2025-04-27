@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-__all__ = ['combination', 'fock_bin', 'get_fock_bin_by_N', 'get_fock_half_N',
-           'get_fock_full_N', 'get_fock_full_N_fast',
+__all__ = ['combination', 'fock_bin', 'get_fock_bin_by_N',
+           'get_fock_half_N', 'get_fock_full_N',
            'get_fock_basis_by_NLz', 'get_fock_basis_by_NSz',
            'get_fock_basis_by_NJz', 'get_fock_basis_by_N_abelian',
            'get_fock_basis_by_N_LzSz', 'write_fock_dec_by_N']
@@ -179,52 +179,10 @@ def get_fock_half_N(N):
     return res
 
 
-def get_fock_full_N(norb, N):
-    """
-    Get the decimal digitals to represent Fock states.
-
-    Parameters
-    ----------
-    norb: int
-        Number of orbitals.
-    N: int
-        Number of occupancy.
-
-    Returns
-    -------
-    res: list of int
-        The decimal digitals to represent Fock states.
-
-    Examples
-    --------
-    >>> import edrixs
-    >>> edrixs.fock_bin(4,2)
-    [[1, 1, 0, 0],
-     [1, 0, 1, 0],
-     [0, 1, 1, 0],
-     [1, 0, 0, 1],
-     [0, 1, 0, 1],
-     [0, 0, 1, 1]]
-
-    >>> import edrixs
-    >>> edrixs.get_fock_full_N(4,2)
-    [3, 5, 6, 9, 10, 12]
-
-    """
-
-    res = []
-    half_N = get_fock_half_N(norb // 2)
-    for m in range(norb // 2 + 1):
-        n = N - m
-        if n >= 0 and n <= norb // 2:
-            res.extend([i * 2**(norb // 2) + j for i in half_N[m] for j in half_N[n]])
-    return res
-
-
-def get_fock_full_N_fast(N: int, r: int):
+def get_fock_full_N(norb: int, N: int) -> list[int]:
     """
     Get the decimal digitals to represent Fock states via a fast
-    Gosper’s hack method. This is a fast version of get_fock_full_N.
+    Gosper’s hack method.
 
     Parameters
     ----------
@@ -235,47 +193,37 @@ def get_fock_full_N_fast(N: int, r: int):
 
     Returns
     -------
-    res: list of int
+    res: List[int]
         The decimal digitals to represent Fock states.
 
     Examples
     --------
-    >>> import edrixs
-    >>> edrixs.fock_bin(4,2)
-    [[1, 1, 0, 0],
-     [1, 0, 1, 0],
-     [0, 1, 1, 0],
-     [1, 0, 0, 1],
-     [0, 1, 0, 1],
-     [0, 0, 1, 1]]
 
     >>> import edrixs
     >>> edrixs.get_fock_full_N_fast(4,2)
     [3, 5, 6, 9, 10, 12]
 
     """
-    if r < 0:
-        raise Exception("r must be > 0")
-    if r > N:
-        raise Exception("r cannot exceed N")
+    if N < 0:
+        raise Exception("N must be > 0")
+    if N > norb:
+        raise Exception("N cannot exceed norb")
+    if N == 0:
+        return [0]
 
-    all_ones = (1 << N) - 1
+    res = []
+    # initial mask: N ones in the least significant bits
+    mask = (1 << N) - 1
+    limit = 1 << norb
 
-    # start y as the r-complement pattern with (N-r) ones:
-    y = (1 << (N - r)) - 1
-    limit = 1 << N
+    while mask < limit:
+        res.append(mask)
+        # Gosper’s hack to get the next mask with the same popcount:
+        c = mask & -mask
+        r = mask + c
+        mask = (((r ^ mask) >> 2) // c) | r
 
-    result = []
-    while y < limit:
-        # flip back to get an r‐popcount pattern in descending order
-        result.append(all_ones ^ y)
-
-        # Gosper’s hack on y to get next higher (N-r)-popcount pattern
-        c = y & -y
-        yc = y + c
-        y = (((yc ^ y) >> 2) // c) | yc
-
-    return result
+    return res
 
 
 def get_fock_basis_by_NLz(norb, N, lz_list):
