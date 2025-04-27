@@ -205,9 +205,11 @@ def get_fock_full_N(norb: int, N: int) -> list[int]:
 
     """
     if N < 0:
-        raise ValueError("N must be non-negative")
+        raise ValueError(f"N must be non-negative, "
+                         f"but N={N} was used.")
     if N > norb:
-        raise Exception("N cannot exceed norb")
+        raise ValueError(f"N cannot exceed norb, currently "
+                         f"N={N} and norb={norb}.")
     if N == 0:
         return [0]
 
