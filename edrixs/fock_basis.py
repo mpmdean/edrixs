@@ -181,7 +181,7 @@ def get_fock_half_N(N):
 
 def get_fock_full_N(norb: int, N: int) -> list[int]:
     """
-    Get the decimal digitals to represent Fock states via a fast
+    Get the decimal numbers to represent Fock states via a fast
     Gosper’s hack method.
 
     Parameters
