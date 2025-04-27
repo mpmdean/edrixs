@@ -44,7 +44,7 @@ To make changes to edrixs, it can be useful to work within a docker environment.
 
 * From within the container, reinstalling edrixs, running the tests, and building the documentation can be done via the following commands::
 
-    pip install -v ./edrixs
+    pip install -v .
 
     ./scripts/run-tests.sh
 
