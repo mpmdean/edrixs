@@ -200,7 +200,7 @@ def get_fock_full_N(norb: int, N: int) -> list[int]:
     --------
 
     >>> import edrixs
-    >>> edrixs.get_fock_full_N_fast(4,2)
+    >>> edrixs.get_fock_full_N(4,2)
     [3, 5, 6, 9, 10, 12]
 
     """
@@ -473,22 +473,13 @@ def write_fock_dec_by_N(N, r, fname='fock_i.in'):
     >>> import edrixs
     >>> edrixs.write_fock_dec_by_N(4, 2, 'fock_i.in')
     file fock_i.in looks like
-    15
+    6
     3
     5
     6
     9
     10
     12
-    17
-    18
-    20
-    24
-    33
-    34
-    36
-    40
-    48
 
     where, the first line is the total numer of Fock states,
     and the following lines are the Fock states in decimal form.
