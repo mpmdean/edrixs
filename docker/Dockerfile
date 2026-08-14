@@ -53,8 +53,12 @@ FROM dep_builder as app_builder
 RUN pip install --upgrade pip setuptools
 ENV PETSC_CONFIGURE_OPTIONS="--with-scalar-type=complex --with-precision=double"
 
+RUN pip install numpy mpi4py && \
+  pip install petsc petsc4py && \
+  pip install slepc slepc4py && \
+  pip install scipy sympy matplotlib sphinx ipython jupyter jupyterlab ipympl ipywidgets lmfit
 
-RUN pip install numpy scipy sympy petsc petsc4py slepc slepc4py matplotlib sphinx mpi4py ipython jupyter jupyterlab ipympl ipywidgets lmfit
+RUN python -c "import numpy as np; from petsc4py import PETSc; from slepc4py import SLEPc; assert PETSc.ScalarType is np.complex128"
 
 COPY --chown=docker . edrixs
 
