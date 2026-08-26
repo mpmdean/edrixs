@@ -58,8 +58,22 @@ v_soc = (lam, lam)
 ################################################################################
 # Diagonalization
 # ------------------------------------------------------------------------------
-# We obtain the ground and intermediate state eigenenergies and the transition
-# operators via matrix diagonalization. Note that the calculation does not know
+# The staged EDRIXS interface separates the physical model from its numerical
+# representation. :func:`~edrixs.model_1v1c` returns one-body matrices
+# (:code:`emat_i` and :code:`emat_n`), Coulomb tensors (:code:`umat_i` and
+# :code:`umat_n`), compact Fock-basis specifications (:code:`basis_i` and
+# :code:`basis_n`), and Cartesian dipole matrices (:code:`trans_mat`). The
+# :code:`i` quantities describe the initial and final states without a core
+# hole, while the :code:`n` quantities describe the intermediate state with a
+# core hole.
+#
+# :func:`~edrixs.get_ops` converts these backend-independent ingredients into
+# many-body initial/final and intermediate Hamiltonians, plus dipole operators
+# that map the initial Fock space to the intermediate one. We choose the SciPy
+# backend, which represents these many-body operators as sparse matrices.
+# :func:`~edrixs.ed` then obtains the low-energy initial-state eigenpairs used
+# by :func:`~edrixs.xas` and :func:`~edrixs.rixs`.
+# Note that the calculation does not know
 # the core hole energy, so we need to adjust the energy that the resonance will
 # appear at by hand. We know empirically that the resonance is at 11215 eV
 # and that putting four electrons into the valance band costs about
@@ -67,11 +81,21 @@ v_soc = (lam, lam)
 # we are assuming a perfectly cubic crystal field, which we have already
 # implemented when we specified the use of the :math:`t_{2g}` subshell only
 # so we do not need to pass an additional :code:`v_cfmat` matrix.
-
+backend = 'scipy'
 off = 11215 - 6
-out = edrixs.ed_1v1c_py(shell_name, shell_level=(0, -off), v_soc=v_soc,
-                        c_soc=info['c_soc'], v_noccu=v_noccu, slater=slater)
-eval_i, eval_n, trans_op = out
+out = edrixs.model_1v1c(
+    shell_name, shell_level=(0, -off), v_soc=v_soc,
+    c_soc=info['c_soc'], v_noccu=v_noccu, slater=slater,
+)
+emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
+
+hmat_i, hmat_n, trans_ops = edrixs.get_ops(
+    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
+    backend=backend,
+)
+
+
+eval_i, evec_i = edrixs.ed(hmat_i, num_evals=2)
 
 ################################################################################
 # Compute XAS
@@ -79,7 +103,7 @@ eval_i, eval_n, trans_op = out
 # To calculate XAS we need to correctly specify the orientation of the x-rays
 # with respect to the sample. By default, the :math:`x, y, z` coordinates
 # of the sample's crystal field, will be aligned with our lab frame, passing
-# :code:`loc_axis` to :code:`ed_1v1c_py` can be used to specify a different
+# :code:`loc_axis` to :code:`model_1v1c` can be used to specify a different
 # convention. The experimental geometry is specified following the angles
 # shown in Figure 1 of Y. Wang et al.,
 # `Computer Physics Communications 243, 151-165 (2019)
@@ -87,36 +111,30 @@ eval_i, eval_n, trans_op = out
 # setting has x-rays along :math:`z` for :math:`\theta=\pi/2` rad
 # and the x-ray beam along :math:`-x` for
 # :math:`\theta=\phi=0`. Parameter :code:`scatter_axis` can be passed to
-# :code:`xas_1v1c_py` to specify a different geometry if desired.
+# :code:`xas` to specify a different geometry if desired.
 #
 # Variable :code:`pol_type` specifies a list of different x-ray
 # polarizations to calculate. Here we will use so-called :math:`\pi`-polarization
 # where the x-rays are parallel to the plane spanned by the incident
 # beam and the sample :math:`z`-axis.
 #
-# EDRIXS represents the system's ground state using a set of
-# low energy eigenstates weighted by Boltzmann thermal factors.
-# These eigenstates are specified by :code:`gs_list`,
-# which is of the form :math:`[0, 1, 2, 3, \dots]`. In this example, we
-# calculate these states as those that have non-negligible thermal
-# population. The function :code:`xas_1v1c_py` assumes that the spectral
-# broadening is dominated by the inverse core hole lifetime :code:`gamma_c`,
-# which is the Lorentzian half width at half maximum.
+# EDRIXS weights the retained low-energy eigenstates by their Boltzmann factors.
+# The spectral broadening is dominated by the inverse core-hole lifetime
+# :code:`gamma_c`, the Lorentzian half width at half maximum.
 
 ominc = np.linspace(11200, 11230, 50)
 temperature = 300  # in K
-prob = edrixs.boltz_dist(eval_i, temperature)
-gs_list = [n for n, prob in enumerate(prob) if prob > 1e-6]
 
 thin = 30*np.pi/180
 phi = 0
 pol_type = [('linear', 0)]
+gamma_c = info['gamma_c'][0]
 
-xas = edrixs.xas_1v1c_py(
-    eval_i, eval_n, trans_op, ominc, gamma_c=info['gamma_c'],
-    thin=thin, phi=phi, pol_type=pol_type,
-    gs_list=gs_list)
-
+xas = edrixs.xas(
+    eval_i, evec_i, hmat_n, trans_ops, ominc,
+    gamma_c=gamma_c, thin=thin, phi=phi, pol_type=pol_type,
+    temperature=temperature,
+)
 
 ################################################################################
 # Compute RIXS
@@ -140,12 +158,12 @@ pol_type_rixs = [('linear', 0, 'linear', 0), ('linear', 0, 'linear', np.pi/2)]
 thout = 60*np.pi/180
 gamma_f = 0.02
 
-rixs = edrixs.rixs_1v1c_py(
-    eval_i, eval_n, trans_op, ominc, eloss,
-    gamma_c=info['gamma_c'], gamma_f=gamma_f,
+rixs = edrixs.rixs(
+    eval_i, evec_i, hmat_i, hmat_n, trans_ops, ominc, eloss,
+    gamma_c=gamma_c, gamma_f=gamma_f,
     thin=thin, thout=thout, phi=phi,
-    pol_type=pol_type_rixs, gs_list=gs_list,
-    temperature=temperature
+    pol_type=pol_type_rixs,
+    temperature=temperature,
 )
 
 ################################################################################
@@ -205,22 +223,29 @@ plt.show()
 ten_dq = 3.5
 v_cfmat = edrixs.cf_cubic_d(ten_dq)
 off = 11215 - 6 + ten_dq*2/5
-out = edrixs.ed_1v1c_py(('d', 'p32'), shell_level=(0, -off), v_soc=v_soc,
-                        v_cfmat=v_cfmat,
-                        c_soc=info['c_soc'], v_noccu=v_noccu, slater=slater)
-eval_i, eval_n, trans_op = out
+out = edrixs.model_1v1c(
+    ('d', 'p32'), shell_level=(0, -off), v_soc=v_soc,
+    v_cfmat=v_cfmat, c_soc=info['c_soc'], v_noccu=v_noccu, slater=slater,
+)
+emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
+hmat_i, hmat_n, trans_ops = edrixs.get_ops(
+    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
+    backend=backend,
+)
+eval_i, evec_i = edrixs.ed(hmat_i, num_evals=2)
 
-xas_full_d_shell = edrixs.xas_1v1c_py(
-    eval_i, eval_n, trans_op, ominc, gamma_c=info['gamma_c'],
-    thin=thin, phi=phi, pol_type=pol_type,
-    gs_list=gs_list)
+xas_full_d_shell = edrixs.xas(
+    eval_i, evec_i, hmat_n, trans_ops, ominc,
+    gamma_c=gamma_c, thin=thin, phi=phi, pol_type=pol_type,
+    temperature=temperature,
+)
 
-rixs_full_d_shell = edrixs.rixs_1v1c_py(
-    eval_i, eval_n, trans_op, np.array([11215]), eloss,
-    gamma_c=info['gamma_c'], gamma_f=gamma_f,
-    thin=thin, thout=thout, phi=phi,
-    pol_type=pol_type_rixs, gs_list=gs_list,
-    temperature=temperature)
+rixs_full_d_shell = edrixs.rixs(
+    eval_i, evec_i, hmat_i, hmat_n, trans_ops, np.array([11215]), eloss,
+    gamma_c=gamma_c, gamma_f=gamma_f,
+    thin=thin, thout=thout, phi=phi, pol_type=pol_type_rixs,
+    temperature=temperature,
+)
 
 fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 plot_it(axs, ominc, xas, eloss, rixscut, label='$t_{2g}$ subshell')
