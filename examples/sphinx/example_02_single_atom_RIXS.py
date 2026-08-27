@@ -53,16 +53,18 @@ slater_n = [
     0.0, 0.0           # Fk for p
 ]
 slater = [slater_i, slater_n]
-v_soc = (lam, lam)
 
 ################################################################################
 # Diagonalization
 # ------------------------------------------------------------------------------
 # The staged EDRIXS interface separates the physical model from its numerical
-# representation. :func:`~edrixs.model_1v1c` returns one-body matrices
+# representation. :func:`~edrixs.model_siam` returns one-body matrices
 # (:code:`emat_i` and :code:`emat_n`), Coulomb tensors (:code:`umat_i` and
 # :code:`umat_n`), compact Fock-basis specifications (:code:`basis_i` and
-# :code:`basis_n`), and Cartesian dipole matrices (:code:`trans_mat`). The
+# :code:`basis_n`), and Cartesian dipole matrices (:code:`trans_mat`). We set
+# :code:`nbath=0`, so the SIAM reduces to the single-atom model used here. The
+# impurity one-body matrix :code:`imp_mat` contains the valence spin--orbit
+# coupling and, below, the crystal field.
 # :code:`i` quantities describe the initial and final states without a core
 # hole, while the :code:`n` quantities describe the intermediate state with a
 # core hole.
@@ -71,7 +73,7 @@ v_soc = (lam, lam)
 # many-body initial/final and intermediate Hamiltonians, plus dipole operators
 # that map the initial Fock space to the intermediate one. We choose the SciPy
 # backend, which represents these many-body operators as sparse matrices.
-# :func:`~edrixs.ed` then obtains the low-energy initial-state eigenpairs used
+# :func:`~edrixs.ed` then obtains the retained low-energy eigenpairs used
 # by :func:`~edrixs.xas` and :func:`~edrixs.rixs`.
 # Note that the calculation does not know
 # the core hole energy, so we need to adjust the energy that the resonance will
@@ -83,9 +85,10 @@ v_soc = (lam, lam)
 # so we do not need to pass an additional :code:`v_cfmat` matrix.
 backend = 'scipy'
 off = 11215 - 6
-out = edrixs.model_1v1c(
-    shell_name, shell_level=(0, -off), v_soc=v_soc,
-    c_soc=info['c_soc'], v_noccu=v_noccu, slater=slater,
+imp_mat = edrixs.atom_hsoc(shell_name[0], lam)
+out = edrixs.model_siam(
+    shell_name, nbath=0, v_noccu=v_noccu, c_level=-off,
+    imp_mat=imp_mat, slater=slater,
 )
 emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
 
@@ -95,7 +98,7 @@ hmat_i, hmat_n, trans_ops = edrixs.get_ops(
 )
 
 
-eval_i, evec_i = edrixs.ed(hmat_i, num_evals=2)
+eval_i, evec_i = edrixs.ed(hmat_i, num_evals=2, backend=backend)
 
 ################################################################################
 # Compute XAS
@@ -103,7 +106,7 @@ eval_i, evec_i = edrixs.ed(hmat_i, num_evals=2)
 # To calculate XAS we need to correctly specify the orientation of the x-rays
 # with respect to the sample. By default, the :math:`x, y, z` coordinates
 # of the sample's crystal field, will be aligned with our lab frame, passing
-# :code:`loc_axis` to :code:`model_1v1c` can be used to specify a different
+# :code:`loc_axis` to :code:`model_siam` can be used to specify a different
 # convention. The experimental geometry is specified following the angles
 # shown in Figure 1 of Y. Wang et al.,
 # `Computer Physics Communications 243, 151-165 (2019)
@@ -133,7 +136,7 @@ gamma_c = info['gamma_c'][0]
 xas = edrixs.xas(
     eval_i, evec_i, hmat_n, trans_ops, ominc,
     gamma_c=gamma_c, thin=thin, phi=phi, pol_type=pol_type,
-    temperature=temperature,
+    temperature=temperature, backend=backend,
 )
 
 ################################################################################
@@ -163,7 +166,7 @@ rixs = edrixs.rixs(
     gamma_c=gamma_c, gamma_f=gamma_f,
     thin=thin, thout=thout, phi=phi,
     pol_type=pol_type_rixs,
-    temperature=temperature,
+    temperature=temperature, backend=backend,
 )
 
 ################################################################################
@@ -223,28 +226,29 @@ plt.show()
 ten_dq = 3.5
 v_cfmat = edrixs.cf_cubic_d(ten_dq)
 off = 11215 - 6 + ten_dq*2/5
-out = edrixs.model_1v1c(
-    ('d', 'p32'), shell_level=(0, -off), v_soc=v_soc,
-    v_cfmat=v_cfmat, c_soc=info['c_soc'], v_noccu=v_noccu, slater=slater,
+imp_mat = edrixs.atom_hsoc('d', lam) + v_cfmat
+out = edrixs.model_siam(
+    ('d', 'p32'), nbath=0, v_noccu=v_noccu, c_level=-off,
+    imp_mat=imp_mat, slater=slater,
 )
 emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
 hmat_i, hmat_n, trans_ops = edrixs.get_ops(
     emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
     backend=backend,
 )
-eval_i, evec_i = edrixs.ed(hmat_i, num_evals=2)
+eval_i, evec_i = edrixs.ed(hmat_i, num_evals=2, backend=backend)
 
 xas_full_d_shell = edrixs.xas(
     eval_i, evec_i, hmat_n, trans_ops, ominc,
     gamma_c=gamma_c, thin=thin, phi=phi, pol_type=pol_type,
-    temperature=temperature,
+    temperature=temperature, backend=backend,
 )
 
 rixs_full_d_shell = edrixs.rixs(
     eval_i, evec_i, hmat_i, hmat_n, trans_ops, np.array([11215]), eloss,
     gamma_c=gamma_c, gamma_f=gamma_f,
     thin=thin, thout=thout, phi=phi, pol_type=pol_type_rixs,
-    temperature=temperature,
+    temperature=temperature, backend=backend,
 )
 
 fig, axs = plt.subplots(1, 2, figsize=(10, 4))
