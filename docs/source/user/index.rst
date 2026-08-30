@@ -14,8 +14,7 @@ edrixs User Guide
    installation
    usedocker
    devcontainer
-   quickstart
-   basics
+   introduction
    pythontips
    examples
    papers

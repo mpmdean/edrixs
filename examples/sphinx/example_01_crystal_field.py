@@ -19,13 +19,13 @@ np.set_printoptions(precision=2, suppress=True, linewidth=90)
 # Let us start by considering the common case of a :math:`d` atomic shell in a
 # cubic crystal field. This is controlled by parameter :math:`10D_q` and is
 # described in terms of a matrix which we will assign to :code:`cfmat`. edrixs
-# can make this matrix via.
+# can make this matrix via
 ten_dq = 10
 cfmat = edrixs.angular_momentum.cf_cubic_d(ten_dq)
 
 ################################################################################
 # Note this matrix is in a complex harmonic basis :math:`Y^m_l` where :math:`m`
-# goes from :math:`-l,-l+1,...,l-1, l`. There is an up spin and a down
+# goes from :math:`-l, -l+1, ..., l-1, l`. There is an up spin and a down
 # spin for each :math:`Y^m_l`. This matrix is not diagonal in the complex
 # harmonic basis, but it would be diagonal in the real harmonic basis
 # :math:`d_{3z^2-r^2}, d_{xz}, d_{yz}, d_{x^2-y^2}, d_{xy}`.
@@ -73,9 +73,9 @@ print(cfmat_rhb.real)
 ################################################################################
 # where :code:`edrixs.tmat_c2r('d', ispin=True)` is the transformation matrix.
 # We needed to tell edrixs that we are working with a :math:`d`-shell and that it
-# should include spin. We could also have transformed :code:`evecs_i` to see how these
-# eignevectors are  composed of the real harmonic basis. We will see an example
-# of this later.
+# should include spin. We could also have transformed :code:`evecs_i` to see how
+# these eigenvectors are composed of the real harmonic basis. We will see an
+# example of this later.
 
 ################################################################################
 # Crystal field on an atom
@@ -93,13 +93,15 @@ atomic_slater = edrixs.get_atom_data('Ni', '3d', noccu, edge='L3')['slater_i']
 ten_dq, d1, d3 = 2.5, 0.9, .2
 
 ################################################################################
-# :func:`~edrixs.model_1v1c` constructs the one-body matrix, Coulomb tensor, and
-# compact Fock-basis specification. Although this is an atomic calculation,
-# the model constructor requires a core shell, so we include a filled and
-# decoupled :math:`s` core shell. It does not change the :math:`d^8` spectrum.
-# :func:`~edrixs.build_op` then constructs the many-body Hamiltonian from the
-# initial-state model data, and :func:`~edrixs.ed` diagonalizes it. We put this
-# procedure into a function, with the option to scale the Coulomb interactions.
+# Since this is a purely atomic calculation with no core shell, we assemble the
+# single-particle ingredients directly rather than going through
+# :func:`~edrixs.model_1v1c`. :class:`~edrixs.FockBasisSpec` describes the
+# :math:`d^8` Fock space (8 electrons in 10 spin-orbitals),
+# :func:`~edrixs.cf_tetragonal_d` builds the one-body crystal-field matrix and
+# :func:`~edrixs.get_umat_slater` the Coulomb tensor, both in the default
+# complex-harmonic basis. :func:`~edrixs.build_op` then constructs the many-body
+# Hamiltonian and :func:`~edrixs.ed` diagonalizes it. We put this procedure into
+# a function, with the option to scale the Coulomb interactions.
 
 
 def diagonalize(scaleU=1):
@@ -156,13 +158,11 @@ nd_complex_harmoic_basis = edrixs.cb_op(nd_real_harmoic_basis,
 
 
 def transform_occupancy_operators(evecs_i):
-    return [
-        edrixs.cb_op(
+    op = [edrixs.cb_op(
             edrixs.build_op(nd_vec, None, basis_i, backend='dense'),
-            evecs_i,
-        )
-        for nd_vec in nd_complex_harmoic_basis
-    ]
+            evecs_i)
+        for nd_vec in nd_complex_harmoic_basis]
+    return op
 
 
 nd_op = transform_occupancy_operators(evecs_i)
@@ -185,7 +185,7 @@ for evalue, row in zip(evals_i, nd_expt.T):
 
 ################################################################################
 # The lowest energy state involves putting both holes in the :math:`x^2-y^2`
-# orbital, which makes sense.  Now, let us redo the proceedure including Coulomb
+# orbital, which makes sense.  Now, let us redo the procedure including Coulomb
 # repulsion, which imposes an energy cost to putting multiple electrons in the
 # same orbital.
 

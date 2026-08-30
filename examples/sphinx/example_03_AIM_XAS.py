@@ -23,7 +23,7 @@ interact with the impurity by symmetry. By doing this the problem can be
 represented with fewer orbitals, which makes the calculation far more efficient.
 The standard EDRIXS solver that we will use assumes that the bath states are
 represented by an integer number of bath sites set by :code:`nbath`, each of
-which hosts the same number of spin-orbits as the impurity e.g. 10 for a
+which hosts the same number of spin-orbitals as the impurity e.g. 10 for a
 :math:`d`-electron material.
 
 NiO has a rocksalt structure in which all Ni atoms are surrounded by six O
@@ -51,7 +51,7 @@ import matplotlib.pyplot as plt
 # bath is full. The solver that we will
 # use can simulate multiple bath sites. In our case we specify
 # :code:`nbath  = 1` sites. Electrons will be able to transition from O to Ni
-# during our calculation, but the total number of valance electrons
+# during our calculation, but the total number of valence electrons
 # :code:`v_noccu` will be conserved.
 nd = 8
 norb_d = 10
@@ -120,7 +120,8 @@ message = ("E_d = {:.3f} eV\n"
            "E_dc = {:.3f} eV\n"
            "E_Lc = {:.3f} eV\n"
            "E_p = {:.3f} eV\n")
-print(message.format(E_d, E_L, E_dc, E_Lc, E_p))
+if __name__ == "__main__":
+    print(message.format(E_d, E_L, E_dc, E_Lc, E_p))
 
 
 ################################################################################
@@ -188,8 +189,8 @@ imp_mat_n = CF + soc + E_dc_mat
 ################################################################################
 # The energy level of the bath(s) is described by a matrix where the row index
 # denotes which bath and the column index denotes which orbital. Here we have
-# only one bath, with 10 spin-orbitals. We initialize the matrix to
-# :code:`norb_d` and then split the energies according to :code:`ten_dq_bath`.
+# only one bath, with 10 spin-orbitals. We initialize every entry to the bath
+# energy :code:`E_L` and then split the levels according to :code:`ten_dq_bath`.
 ten_dq_bath = 1.44
 bath_level = np.full((nbath, norb_d), E_L, dtype=complex)
 bath_level[0, :2] += ten_dq_bath*.6  # 3z2-r2
@@ -254,14 +255,14 @@ gamma_c = np.full(ominc_xas.shape, 0.48/2)
 
 ################################################################################
 # Magnetic field is a three-component vector in eV specified with respect to the
-# same local axis as the x-ray beam. Since we are considering a powder here
-# we create an isotropic normalized vector. :code:`on_which = 'both'` specifies to
-# apply the operator to the total spin plus orbital angular momentum as is
-# appropriate for a physical external magnetic field. You can use
-# :code:`on_which = 'spin'` to apply the operator to spin in order to simulate
-# magnetic order in the sample. The value of the Bohr Magneton can
-# be useful for converting here :math:`\mu_B = 5.7883818012\times 10^{−5}`.
-# For this example, we will account for magnetic order in the sample by
+# same local axis as the x-ray beam. :code:`on_which = 'both'` applies the
+# operator to the total spin plus orbital angular momentum, as is appropriate
+# for a physical external magnetic field. Passing :code:`on_which = 'spin'`
+# instead applies it to spin only, which is a convenient way to impose a
+# magnetic order direction on the sample. The Bohr magneton
+# :math:`\mu_B = 5.7883818012\times 10^{-5}` eV/T is useful for converting
+# a physical field strength. Here we mimic magnetic order by applying a small
+# spin field along :math:`z`.
 ext_B = np.array([0.00, 0.00, 0.12])
 on_which = 'spin'
 
@@ -331,13 +332,14 @@ xas = edrixs.xas(
 ################################################################################
 # Let's plot the data and save it just in case. The returned array has shape
 # :code:`(len(ominc_xas), len(poltype_xas))`.
-fig, ax = plt.subplots()
+if __name__ == "__main__":
+    fig, ax = plt.subplots()
 
-ax.plot(ominc_xas, xas[:, 0])
-ax.set_xlabel('Energy (eV)')
-ax.set_ylabel('XAS intensity')
-ax.set_title('Anderson impurity model for NiO')
-plt.show()
+    ax.plot(ominc_xas, xas[:, 0])
+    ax.set_xlabel('Energy (eV)')
+    ax.set_ylabel('XAS intensity')
+    ax.set_title('Anderson impurity model for NiO')
+    plt.show()
 
 np.savetxt('xas.dat', np.column_stack((ominc_xas, xas)))
 

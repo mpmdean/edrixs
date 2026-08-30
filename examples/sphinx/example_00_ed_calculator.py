@@ -13,7 +13,6 @@ coupling.
 import numpy as np
 from math import comb
 import matplotlib.pyplot as plt
-import scipy
 import edrixs
 
 ################################################################################
@@ -32,19 +31,20 @@ F0, F2 = 4.0, 1.0
 # ------------------------------------------------------------------------------
 # The Coulomb interactions in EDRIXS are described by a tensor. Understanding this
 # in full is complicated and requires careful consideration of the symmetry of the
-# interactions. See example 6 for more discussion if desired.
+# interactions. See :ref:`sphx_glr_auto_examples_example_09_Coulomb.py` for more
+# discussion if desired.
 # EDRIXS can construct the matrix via
 umat = edrixs.get_umat_slater('p', F0, F2)
 
 ################################################################################
 # Create basis
 # ------------------------------------------------------------------------------
-# Now we build the binary form of the Fock basis :math:`|F>` (we consider it
-# preferable to use the standard :math:`F` and trust the reader to avoid
+# Now we build the binary form of the Fock basis :math:`|F\rangle` (we consider
+# it preferable to use the standard :math:`F` and trust the reader to avoid
 # confusing it with the interaction parameters.)
 # The Fock basis is the simplest legitimate form for the basis and it consists
 # of a series of 1s and 0s where 1 means occupied and
-# 0 means  empty. These are in order up, down, up, down, up, down.
+# 0 means empty. These are in order up, down, up, down, up, down.
 # For computational efficiency, these are encoded as integers
 basis = edrixs.get_fock_basis_int(norb, noccu)
 print("Integer\tBinary")
@@ -64,46 +64,45 @@ print(message.format(norb, noccu, comb(norb, noccu), len(basis)))
 ################################################################################
 # Transform interactions into Fock basis
 # ------------------------------------------------------------------------------
-# edrixs works by initiailly creating a Hamiltonian matrix
+# edrixs works by initially creating a Hamiltonian matrix
 # :math:`\hat{H}` in the single particle basis and then transforming into
 # our chosen Fock basis. The Hamiltonian contains a two fermion term built from
 # the single particle matrix :math:`t_{ij}` (passed as :code:`emat`)
 #
 #     .. math::
-#        \hat{H}_{2} = <F_l|\sum_{ij}t_{ij}\hat{f}_{i}^{\dagger}
-#                      \hat{f}_{j}|F_r>
+#        \hat{H}_{2} = \langle F_l|\sum_{ij}t_{ij}\hat{f}_{i}^{\dagger}
+#                      \hat{f}_{j}|F_r\rangle
 #
 # and a four fermion term built from the interaction tensor :math:`U_{ijkl}`
 # (passed as :code:`umat`)
 #
 #     .. math::
-#        \hat{H}_{4} = <F_l|\sum_{ijkl}U_{ijkl}\hat{f}_{i}^{\dagger}
+#        \hat{H}_{4} = \langle F_l|\sum_{ijkl}U_{ijkl}\hat{f}_{i}^{\dagger}
 #                      \hat{f}_{j}^{\dagger}
-#                      \hat{f}_{k}\hat{f}_{l}|F_r>
+#                      \hat{f}_{k}\hat{f}_{l}|F_r\rangle
 #
 # For now we just build the :code:`umat` piece. :code:`backend='dense'`
-# It tells edrixs to build the full matrix including the zeros.
+# tells edrixs to build the full matrix including the zeros.
 backend = 'dense'
 H = edrixs.build_op(None, umat, basis, backend=backend)
 
 ################################################################################
 # Diagonalize the matrix
 # ------------------------------------------------------------------------------
-# For a small problem such as this it is convenient to use the native
-# `scipy <https://scipy.org>`_ diagonalization routine. This returns eigenvalues
-# :code:`e` and eignvectors :code:`v` where eigenvalue :code:`e[i]` corresponds
+# Diagonalization returns eigenvalues
+# :code:`e` and eigenvectors :code:`v` where eigenvalue :code:`e[i]` corresponds
 # to eigenvector :code:`v[:,i]`.
-e, v = edrixs.ed(H, num_evals=len(basis), )
-print("{} eignvalues and {} eigvenvectors {} elements long.".format(len(e),
+e, v = edrixs.ed(H, num_evals=len(basis))
+print("{} eigenvalues and {} eigenvectors {} elements long.".format(len(e),
                                                                     v.shape[1],
                                                                     v.shape[0]))
 
 ################################################################################
 # Computing expectation values
 # ------------------------------------------------------------------------------
-# To interpret the results, it is informative to compute the expectations values
+# To interpret the results, it is informative to compute the expectation values
 # related to the spin :math:`\mathbf{S}`, orbital :math:`\mathbf{L}`,
-# and total :math:`\mathbf{J}`, angular momentum. We first load the relevant
+# and total :math:`\mathbf{J}` angular momentum. We first load the relevant
 # matrices for these quantities for a `p` atomic shell.  We need to specify
 # that we would like to include spin when loading the orbital operator.
 orb_mom = edrixs.get_orb_momentum(l, ispin=True)
@@ -187,8 +186,9 @@ plt.show()
 
 ################################################################################
 # We see Hund's rules in action! Rule 1 says that the highest spin :math:`S=1`
-# state has the lowest energy. Of the two :math:`S=0` states, the state with
-# larger :math:`L=1` is lower energy following rule 2.
+# state has the lowest energy. Of the two :math:`S=0` states, the one with the
+# larger orbital angular momentum (here :math:`L=2`) is lower in energy,
+# following rule 2.
 
 ################################################################################
 # Spin orbit coupling
