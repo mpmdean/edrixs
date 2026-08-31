@@ -15,6 +15,7 @@ edrixs User Guide
    usedocker
    devcontainer
    introduction
+   conventions
    pythontips
    examples
    papers
