@@ -74,11 +74,8 @@ Parameters entering these matrices:
   offset chosen to match experiment.
 * Coulomb interactions are parameterized by Slater integrals :math:`F^k`
   (and :math:`G^k` for core-valence terms).  edrixs ships Hartree-Fock values
-  in ``edrixs.get_atom_data`` and provides conversions ``UJ_to_UdJH``,
-  ``UdJH_to_F0F2F4`` (``...F0F2F4F6`` for ``f`` shells) and ``get_F0``.  The
-  :math:`d`-shell relations (``F2 = J / (3/49 + 20 \cdot 0.625/441)``,
-  ``F4 = 0.625\,F2``, ``JH = (F2+F4)/14``, ``Ud = U - (4/49)(F2+F4)``) are also
-  used for ``4d`` and ``5d`` as an approximation.
+  in ``edrixs.get_atom_data`` and provides some conversions between different
+  notations for the electron correlations.
 * Atomic Slater and SOC values are usually **scaled down** (often 70-90%) to
   approximate screening in the solid.
 
@@ -89,36 +86,35 @@ with helpers such as ``get_umat_slater`` and ``atom_hsoc``.
 
     import edrixs
 
-    # A t2g shell (l_eff = 1): 6 spin-orbitals.
-    Ud, JH = edrixs.UJ_to_UdJH(4, 1)
+    Ud = 4
+    JH = 1
     F0, F2, F4 = edrixs.UdJH_to_F0F2F4(Ud, JH)
 
     umat = edrixs.get_umat_slater('t2g', F0, F2, F4)   # two-body tensor
     emat = edrixs.atom_hsoc('t2g', 0.2)                # one-body: SOC
 
 Crystal-field, hopping or Zeeman terms are further additive contributions to
-``emat``.  If you supply such a matrix in the real-harmonic basis, transform it
-into the default basis first, e.g.
-``cf = edrixs.cb_op(cf_real, edrixs.tmat_r2c('d', True))``.
+``emat``.
 
 .. _many-body-operators:
 
 Many-body operators
 ===================
 
-The second stage of the calculation picks a many-body Fock basis
-:math:`\lvert F \rangle` over the single-particle spin-orbitals and
-evaluates the Hamiltonian in it.
+The second stage picks a many-body Fock basis :math:`\lvert F \rangle` over the
+single-particle spin-orbitals and evaluates the Hamiltonian in it.
 
 ``build_op(emat, umat, basis, backend=...)`` evaluates
 :math:`\langle F_l | \hat{H} | F_r \rangle` for the one- and two-body terms
 above and returns the many-body operator in the chosen backend's
-representation; pass ``None`` for whichever term is absent.  ``get_ops`` is the
+representation; pass ``None`` for whichever term is absent. Since XAS and RIXS
+involve initial states with no core hole and final states with exactly one core
+hole, it is efficient to prepare separate Hamiltonians. ``get_ops`` is the
 spectroscopy-oriented wrapper: given the ``_i`` and ``_n`` matrices and
 ``trans_mat`` from a model, it returns ``hmat_i``, ``hmat_n`` and the many-body
 transition operators ``trans_ops`` in one call.
 
-A few fixed conventions apply:
+A few useful conventions are:
 
 * Valence orbitals come first.  When a problem has both valence and core
   electrons, all valence spin-orbitals are indexed before all core
@@ -136,7 +132,7 @@ A few fixed conventions apply:
 
 .. code-block:: python
 
-    # Continuing the t2g example: 2 electrons in the 6 spin-orbitals.
+    # For a t2g example with 2 electrons in the 6 spin-orbitals.
     basis = edrixs.get_fock_basis_int(6, 2)
     hmat = edrixs.build_op(emat, umat, basis, backend='dense')
 
@@ -160,18 +156,12 @@ The third stage finds the low-energy eigenstates of the many-body Hamiltonian.
     import numpy as np
 
     # Lowest eigenpairs of the t2g Hamiltonian (here: all of them).
-    e, v = edrixs.ed(hmat, num_evals=len(basis), backend='dense')
+    eval_i, evec_i = edrixs.ed(hmat, num_evals=len(basis), backend='dense')
 
 .. _xas:
 
 XAS
 ===
-
-Since XAS involves initial states with no core hole and final states with
-exactly one core hole, it is efficient to prepare separate Hamiltonians:
-eigenstates of ``hmat_i`` are the initial states, ``hmat_n`` propagates the
-core-hole intermediate state, and ``trans_ops`` connects the two.
-
 ``edrixs.xas`` provides spectra as a function of the incident photon energy
 ``ominc`` and returns an array of shape
 ``(len(ominc), len(pol_type))``.  Its main arguments are ``gamma_c``,
