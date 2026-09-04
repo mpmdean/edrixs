@@ -21,8 +21,12 @@ Energies and naming
   intermediate state, which has one.  So ``emat_i``, ``umat_i``, ``basis_i``
   and ``hmat_i`` describe the core-hole-free problem, and ``emat_n``,
   ``umat_n``, ``basis_n`` and ``hmat_n`` the problem with a core hole.
-* **Screening.** Atomic Slater integrals and spin-orbit coupling constants are
-  usually **scaled down** to 70-90% of their Hartree-Fock values to approximate
+* **Coulomb interactions.** The four-body interactions are parameterized using
+  Slater integrals. EDRIXS ships Hartree-Fock values for these integrals in
+  :func:`~edrixs.utils.get_atom_data` and provides conversions between from
+  other common parameterizations such as the Racah parameters in
+  :func:`~edrixs.utils`. The magnitude of the Hartree-Fock values are 
+  usually **scaled down** to 70-90% of their  to approximate
   screening in the solid.
 * **Core-level energies.** The absolute energy of a core level is not defined
   by the calculation.  The resonance position is set by hand through
@@ -61,8 +65,8 @@ so on -- return them **in this default basis**.
 
 .. important::
 
-   You may choose any single-particle basis for the Fock basis, but every
-   matrix and Coulomb tensor entering the Hamiltonian must be expressed in that
+   You may express :code:`emat` and :code:`umat` in any single-particle basis,
+   but everything entering the Hamiltonian must be expressed in that
    *same* basis.  Transform one-body matrices with :func:`~edrixs.cb_op` and
    Coulomb tensors with :func:`~edrixs.transform_utensor`.  The recommended
    practice is to keep the default basis and only transform the extra matrices

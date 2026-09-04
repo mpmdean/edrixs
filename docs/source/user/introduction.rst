@@ -29,7 +29,7 @@ backends.  We review each of them with the help of the flow chart below.
    :alt: Flow chart of the stages of an EDRIXS calculation.
 
    The stages of an EDRIXS calculation.  The quantities passed from one stage
-   to the next are shown on the right.
+   to the next are shown in gray to the right of the arrows.
 
 The sections below follow the figure box by box.  The :ref:`backend` that
 carries out the linear algebra for the last three stages is described on its
@@ -116,9 +116,8 @@ It returns the matrix :math:`\langle \Phi_l \rvert \hat{H} \lvert \Phi_r
 builds everything a XAS or RIXS calculation needs in one call:
 
 * ``emat_i``, ``umat_i``, ``basis_i`` and their ``_n`` counterparts -- the two
-  problems, without and with a core hole.
+  Fock spaces, without and with a core hole.
 * ``trans_mat`` -- the Cartesian photon transition matrices from the model.
-* ``backend`` -- as above.
 
 It returns ``hmat_i``, ``hmat_n`` and the many-body transition operators
 ``trans_ops``.  Because XAS and RIXS connect states with no core hole to states
@@ -173,9 +172,9 @@ RIXS with no scattered-polarization analysis.
 
 See :ref:`sphx_glr_auto_examples_example_02_single_atom_RIXS.py` for a full
 worked calculation of the 
-:func:`~edrixs.models.model_1v1c`, model including plotting the
-incident-energy / energy-loss map. Other functions have more parameters
-to pay attention to but are is most ways not fundamentally more complicated.
+:func:`~edrixs.models.model_1v1c` model including plotting the
+incident-energy / energy-loss map. Other models have more parameters
+to pay attention to but are, in most ways, not fundamentally more complicated.
 
 Where to go next
 ================
