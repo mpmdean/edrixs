@@ -4,17 +4,35 @@
 Conventions
 ***********
 
-This page collects the fixed conventions that edrixs assumes unless you say
-otherwise: the orbital orderings and single-particle bases in which matrices and
-tensors are returned, and the geometry, polarization and broadening conventions
+This page collects the fixed conventions that EDRIXS assumes unless you say
+otherwise: the units and naming of quantities, the orbital orderings and
+single-particle bases in which matrices and tensors are returned, how the Fock
+basis is encoded, and the geometry, polarization and broadening conventions
 used to build spectra.  The :ref:`introduction` describes the interface that
 relies on them, and the :ref:`pedagogical examples <examples>` work through the
 same material in more physical detail.
 
+Energies and naming
+===================
+
+* **Units.** All energies are in **eV**.
+* **Initial and intermediate states.** Throughout EDRIXS, an ``_i`` suffix
+  labels the initial and final states, which have no core hole, and ``_n`` the
+  intermediate state, which has one.  So ``emat_i``, ``umat_i``, ``basis_i``
+  and ``hmat_i`` describe the core-hole-free problem, and ``emat_n``,
+  ``umat_n``, ``basis_n`` and ``hmat_n`` the problem with a core hole.
+* **Screening.** Atomic Slater integrals and spin-orbit coupling constants are
+  usually **scaled down** to 70-90% of their Hartree-Fock values to approximate
+  screening in the solid.
+* **Core-level energies.** The absolute energy of a core level is not defined
+  by the calculation.  The resonance position is set by hand through
+  ``shell_level`` (or ``c_level``) together with an offset chosen to match
+  experiment.
+
 Default orbital ordering and single-particle bases
 ==================================================
 
-Unless specified otherwise, edrixs uses these orderings.
+Unless specified otherwise, EDRIXS uses these orderings.
 
 * **Spin:** interleaved, ``up, dn, up, dn, ...``.
 * **Complex spherical harmonics** :math:`Y_l^m`: ``m = -l, -l+1, ..., l-1, l``.
@@ -56,6 +74,22 @@ so on -- return them **in this default basis**.
 
    with, e.g., ``T = edrixs.tmat_c2r('d', ispin=True)`` to go from complex to
    real harmonics or ``edrixs.tmat_r2c`` for the reverse.
+
+Fock basis
+==========
+
+* **Valence orbitals come first.** When a problem has both valence and core
+  electrons, all valence spin-orbitals are indexed before all core
+  spin-orbitals.
+* **Encoding.** A Fock state is a string of 1s (occupied) and 0s (empty) over
+  the single-particle spin-orbitals, stored as an integer for efficiency.
+* **Specification.** A basis is described compactly by
+  :class:`~edrixs.fock_basis.FockBasisSpec`, built from ``(norb, nocc)`` pairs
+  -- one per shell, each with fixed occupancy.  For a single shell,
+  :func:`~edrixs.fock_basis.get_fock_basis_int` returns a realized
+  integer-encoded basis directly.  :func:`~edrixs.solvers.build_op` and
+  :func:`~edrixs.solvers.get_ops` accept either the specification or a realized
+  basis.
 
 Spectral conventions
 ====================

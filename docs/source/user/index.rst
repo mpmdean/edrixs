@@ -1,7 +1,7 @@
 .. _user:
 
 #################
-edrixs User Guide
+EDRIXS User Guide
 #################
 
 :Release: |version|
@@ -16,6 +16,7 @@ edrixs User Guide
    devcontainer
    introduction
    conventions
+   backend
    pythontips
    examples
    papers
