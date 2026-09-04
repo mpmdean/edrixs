@@ -119,8 +119,8 @@ builds everything a XAS or RIXS calculation needs in one call:
 
 It returns ``hmat_i``, ``hmat_n`` and the many-body transition operators
 ``trans_ops``.  Because XAS and RIXS connect states with no core hole to states
-with exactly one core hole, keeping the two Hamiltonians separate is what makes
-the calculation efficient.
+with exactly one core hole, keeping the two Hamiltonians separate avoids the need to generate a Hamiltonain that spans both spaces and makes
+the calculation more efficient.
 
 The Fock-basis encoding and the valence-before-core orbital ordering that both
 functions assume are set out in :ref:`conventions`.
@@ -168,7 +168,7 @@ resolution width ``gamma_f``, and 4-tuple
 different emitted polarizations and sum them, since this is what happens for
 RIXS with no scattered-polarization analysis.
 
-See :ref:`sphx_glr_auto_examples_example_02_single_atom_RIXS.py` for a full
+See :ref:`sphx_glr_auto_examples_example_02_single_atom_RIXS.py` for a fully
 worked calculation of the 
 :func:`~edrixs.models.model_1v1c` model including plotting the
 incident-energy / energy-loss map. Other models have more parameters
