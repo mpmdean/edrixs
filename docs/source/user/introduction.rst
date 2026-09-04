@@ -90,9 +90,7 @@ the default single-particle basis if it is not already expressed there.
 
 ``umat`` carries the two-body Coulomb interaction.  It is parameterized by
 Slater integrals :math:`F^k`, with :math:`G^k` for the core-valence terms.
-EDRIXS ships Hartree-Fock values in :func:`~edrixs.utils.get_atom_data` and
-provides conversions between the common parameterizations, such as
-:func:`~edrixs.utils.UdJH_to_F0F2F4`.
+
 
 .. _many-body-operators:
 
