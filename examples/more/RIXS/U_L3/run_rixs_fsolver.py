@@ -54,7 +54,7 @@ if __name__ == "__main__":
     ominc_rixs = np.linspace(0, 10, 10)
     eloss = np.linspace(-0.2, 5, 1000)
 
-    poltype_xas = [('isotropic', 0.0)]
+    poltype_xas = [('powder', 0.0)]
 
     poltype_rixs = [('linear', 0.0, 'linear', 0.0),
                     ('linear', 0.0, 'linear', np.pi / 2.0)]

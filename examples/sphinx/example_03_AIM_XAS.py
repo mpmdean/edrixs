@@ -224,8 +224,8 @@ hyb[0, 8:] = Vt2g  # xy
 
 ################################################################################
 # We now need to define the parameters describing the XAS. X-ray polarization
-# can be linear, circular or isotropic (appropriate for a powder).
-poltype_xas = [('isotropic', 0)]
+# can be linear, circular, or powder averaged.
+poltype_xas = [('powder', 0)]
 ################################################################################
 # edrixs uses the temperature in Kelvin to work out the population of the low-lying
 # states via a Boltzmann distribution.
@@ -259,8 +259,9 @@ gamma_c = np.full(ominc_xas.shape, 0.48/2)
 
 ################################################################################
 # Magnetic field is a three-component vector in eV specified with respect to the
-# same local axis as the x-ray beam. Since we are considering a powder here
-# we create an isotropic normalized vector. :code:`on_which = 'both'` specifies to
+# same local axis as the x-ray beam. Since we are considering a powder here,
+# the XAS calculation below averages over crystallite orientations.
+# :code:`on_which = 'both'` specifies to
 # apply the operator to the total spin plus orbital angular momentum as is
 # appropriate for a physical external magnetic field. You can use
 # :code:`on_which = 'spin'` to apply the operator to spin in order to simulate

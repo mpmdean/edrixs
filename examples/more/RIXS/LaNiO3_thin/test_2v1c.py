@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # ---------------------
     ominc_xas = np.linspace(off - 10, off + 20, 1000)
     thin, thout, phi = 15 / 180.0 * np.pi, 75 / 180.0 * np.pi, 0.0
-    poltype_xas = [('isotropic', 0.0)]
+    poltype_xas = [('powder', 0.0)]
     gamma_c, gamma_f = 0.2, 0.1
     # L3-edge
     ominc_rixs = np.linspace(-5.9 + off, -0.9 + off, 10)

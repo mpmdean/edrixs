@@ -61,7 +61,7 @@ if __name__ == "__main__":
     ominc_xas = np.linspace(-20+om_shift, 10+om_shift, 1000)
     ominc_rixs = np.linspace(-6.2+om_shift, -6.2+om_shift, 1)
     eloss = np.linspace(-0.2, 7, 1000)
-    poltype_xas = [('isotropic', 0)]
+    poltype_xas = [('powder', 0)]
     poltype_rixs = [('linear', 0.0, 'linear', 0.0),
                     ('linear', 0.0, 'linear', np.pi / 2.0)]
 

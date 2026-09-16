@@ -1,12 +1,61 @@
 __all__ = ['dipole_trans_oper', 'quadrupole_trans_oper', 'get_trans_oper',
            'unit_wavevector', 'wavevector_with_length', 'get_wavevector_rixs',
            'linear_polvec', 'dipole_polvec_rixs', 'dipole_polvec_xas',
-           'quadrupole_polvec']
+           'quadrupole_polvec', 'powder_average']
+
+import warnings
 
 import numpy as np
 from sympy.physics.wigner import clebsch_gordan
 from .basis_transform import tmat_c2r, tmat_r2c, tmat_c2j, cb_op2
 from .utils import case_to_shell_name, info_atomic_shell
+
+
+def _normalize_polarization_kind(kind):
+    """Return the canonical polarization name, warning for deprecated aliases."""
+    normalized = kind.strip().lower()
+    if normalized == 'isotropic':
+        warnings.warn(
+            "'isotropic' polarization is deprecated; use 'powder' instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return 'powder'
+    return normalized
+
+
+def powder_average(scattering_tensor, incident_pol, outgoing_pol):
+    """Return the E1-E1 RIXS orientational average for a powder.
+
+    This implements Eq. (26) of S. Zhang et al., Phys. Rev. B 114,
+    045133 (2026). The last two axes of ``scattering_tensor`` are the
+    outgoing and incoming Cartesian components, respectively.
+    """
+    scattering_tensor = np.asarray(scattering_tensor)
+    if scattering_tensor.shape[-2:] != (3, 3):
+        raise ValueError("E1-E1 powder averaging requires a 3x3 scattering tensor")
+
+    incident_pol = np.asarray(incident_pol)
+    outgoing_pol = np.asarray(outgoing_pol)
+    geometry = np.array([
+        np.vdot(outgoing_pol, outgoing_pol).real * np.vdot(incident_pol, incident_pol).real,
+        np.abs(np.vdot(outgoing_pol, incident_pol))**2,
+        np.abs(np.dot(outgoing_pol, incident_pol))**2,
+    ])
+    gram = np.array([
+        [4.0, -1.0, -1.0],
+        [-1.0, 4.0, -1.0],
+        [-1.0, -1.0, 4.0],
+    ])
+
+    invariants = np.stack([
+        np.sum(np.abs(scattering_tensor)**2, axis=(-2, -1)),
+        np.abs(np.trace(scattering_tensor, axis1=-2, axis2=-1))**2,
+        np.einsum(
+            '...ij,...ji->...', np.conj(scattering_tensor), scattering_tensor
+        ).real,
+    ])
+    return np.tensordot(np.dot(geometry, gram) / 30.0, invariants, axes=(0, 0)).real
 
 
 def dipole_trans_oper(l1, l2):
