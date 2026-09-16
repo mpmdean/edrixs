@@ -10,7 +10,7 @@ import edrixs.petsc_backend.petsc_backend as backend
 from edrixs.fock_basis import FockBasisSpec
 from edrixs.petsc_backend.lanczos import lanczos_tridiagonal as lanczos_petsc
 from edrixs.scipy_backend.krylov import lanczos_tridiagonal as lanczos_scipy
-from edrixs.solvers import build_op, ed
+from edrixs.solvers import build_op, ed, rixs
 
 
 HAS_PETSC = importlib.util.find_spec("petsc4py") is not None
@@ -86,6 +86,26 @@ def test_public_symbols_are_exported():
         assert hasattr(backend, name)
 
 
+def test_petsc_rixs_accepts_deprecated_isotropic_alias():
+    """PETSc polarization parsing maps isotropic to powder before solving."""
+    arguments = (3, 0.4, 0.8, 0.0, 0.2, 'linear', 1.1, np.eye(3))
+    expected = backend._rixs_polarization_data(
+        arguments[0], arguments[1], arguments[2], arguments[3],
+        'powder', *arguments[4:],
+    )
+    with pytest.warns(DeprecationWarning, match="'isotropic'.*'powder'"):
+        actual = backend._rixs_polarization_data(
+            arguments[0], arguments[1], arguments[2], arguments[3],
+            'isotropic', *arguments[4:],
+        )
+
+    assert_allclose(actual['incoming'], expected['incoming'])
+    assert_allclose(actual['outgoing'], expected['outgoing'])
+    for actual_channel, expected_channel in zip(
+            actual['powder_channels'], expected['powder_channels']):
+        assert_allclose(actual_channel, expected_channel)
+
+
 # -----------------------------------------------------------------------------
 # Numeric PETSc tests
 # -----------------------------------------------------------------------------
@@ -115,6 +135,56 @@ def _petsc_vector(matrix, values):
     vector.assemblyBegin()
     vector.assemblyEnd()
     return vector
+
+
+@requires_petsc
+def test_petsc_powder_rixs_matches_scipy():
+    """PETSc and SciPy implement the same E1-E1 powder contraction."""
+    hmat_i = np.diag([0.0, 0.7])
+    hmat_n = np.array([[1.3, 0.15], [0.15, 2.1]], dtype=complex)
+    transitions = [
+        np.array([[1.0, 0.2j], [0.3, -0.1j]]),
+        np.array([[0.2j, 0.5], [-0.4j, 0.7]]),
+        np.array([[0.6, -0.3j], [0.1j, -0.2]]),
+    ]
+    common = dict(
+        eval_i=np.array([0.0]),
+        ominc=np.array([1.1, 1.4]),
+        eloss=np.array([0.0, 0.4, 0.8]),
+        gamma_c=0.2,
+        gamma_f=0.08,
+        thin=0.4,
+        thout=0.8,
+        pol_type=[('powder', 0.2, 'powder', 1.1)],
+    )
+
+    expected = rixs(
+        evec_i=np.array([[1.0], [0.0]]),
+        hmat_i=hmat_i,
+        hmat_n=hmat_n,
+        trans_op=transitions,
+        backend='scipy',
+        backend_kws={
+            'nkryl': 2,
+            'linsys_tol': 1e-12,
+            'linsys_maxiter': 100,
+            'linsys_restart': 2,
+        },
+        **common,
+    )
+
+    petsc_hmat_i = _petsc_dense_matrix(hmat_i)
+    actual = rixs(
+        evec_i=[_petsc_vector(petsc_hmat_i, [1.0, 0.0])],
+        hmat_i=petsc_hmat_i,
+        hmat_n=_petsc_dense_matrix(hmat_n),
+        trans_op=[_petsc_dense_matrix(operator) for operator in transitions],
+        backend='petsc',
+        backend_kws={'nkryl': 2, 'linsys_tol': 1e-12, 'linsys_max': 100},
+        **common,
+    )
+
+    assert_allclose(actual, expected, rtol=2e-7, atol=2e-9)
 
 
 @requires_petsc

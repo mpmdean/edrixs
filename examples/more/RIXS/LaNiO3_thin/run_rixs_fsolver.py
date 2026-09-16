@@ -50,7 +50,7 @@ if __name__ == "__main__":
     ominc_xas = np.linspace(off - 10, off + 20, 1000)
     thin, thout, phi = 15 / 180.0 * np.pi, 75 / 180.0 * np.pi, 0.0
     poltype_xas = [('linear', 0.0), ('linear', np.pi / 2.0),
-                   ('left', 0.0), ('right', 0.0), ('isotropic', 0.0)]
+                   ('left', 0.0), ('right', 0.0), ('powder', 0.0)]
 
     # L2-edge
     # gamma_c, gamma_f = res['gamma_c'][0], 0.1

@@ -39,7 +39,7 @@ def test_quadrupole_xas_matches_dense_reference_on_tiny_matrices():
         ]
     )
     ominc = np.linspace(-1.0, 1.4, 8)
-    pol_type = [("linear", 0.3), ("left", 0.0), ("isotropic", 0.0)]
+    pol_type = [("linear", 0.3), ("left", 0.0), ("powder", 0.0)]
 
     actual = xas(
         eval_i,

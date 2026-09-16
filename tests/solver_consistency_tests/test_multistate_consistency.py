@@ -37,7 +37,7 @@ def test_xas_two_initial_states_and_energy_dependent_broadening_match_dense(
     center = float(np.median(eval_n) - eval_i[0])
     ominc = np.linspace(center - 0.7, center + 0.7, 7)
     gamma_c = np.linspace(0.18, 0.28, len(ominc))
-    pol_type = [("left", 0.0), ("right", 0.0), ("isotropic", 0.0)]
+    pol_type = [("left", 0.0), ("right", 0.0), ("powder", 0.0)]
 
     actual = xas(
         eval_i[kept],
@@ -87,7 +87,7 @@ def test_rixs_two_initial_states_match_dense(small_1v1c_problem):
     gamma_f = np.linspace(0.055, 0.085, len(eloss))
     pol_type = [
         ("left", 0.0, "right", 0.0),
-        ("isotropic", 0.0, "linear", 0.2),
+        ("powder", 0.0, "linear", 0.2),
     ]
 
     actual = rixs(

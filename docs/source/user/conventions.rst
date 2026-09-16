@@ -105,9 +105,9 @@ Spectral conventions
   all relative to the sample axes.  By default the crystal-field
   :math:`x, y, z` axes coincide with the lab frame; use ``loc_axis`` (model) or
   ``scatter_axis`` (solver) to change this.
-* **Polarization** is given as a list of channels.  For XAS each entry is
-  ``(kind, angle)`` with ``kind`` one of ``'linear'``, ``'circular'`` or
-  ``'isotropic'`` (the last for powders).  For RIXS each entry is a 4-tuple
+* **Polarization and powder averaging** are given as a list of channels. For XAS
+  each entry is ``(kind, angle)`` with ``kind`` one of ``'linear'``,
+  ``'circular'`` or ``'powder'``. For RIXS each entry is a 4-tuple
   ``(in_kind, in_angle, out_kind, out_angle)``; sum the two outgoing channels
   when the experiment does not resolve emitted polarization.
 * **Broadening** is a Lorentzian half width at half maximum.  ``gamma_c`` is the

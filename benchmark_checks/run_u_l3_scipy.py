@@ -131,7 +131,7 @@ def run(output_dir: Path) -> None:
     ominc_rixs = np.linspace(0.0, 10.0, 10)
     eloss = np.linspace(-0.2, 5.0, 1000)
 
-    poltype_xas = [("isotropic", 0.0)]
+    poltype_xas = [("powder", 0.0)]
     poltype_rixs = [
         ("linear", 0.0, "linear", 0.0),
         ("linear", 0.0, "linear", np.pi / 2.0),
@@ -220,7 +220,7 @@ def run(output_dir: Path) -> None:
     np.savetxt(
         output_dir / "xas.dat",
         np.column_stack((ominc_xas, xas)),
-        header="incident_energy_eV  isotropic_xas",
+        header="incident_energy_eV  powder_xas",
     )
 
     # 5. RIXS.

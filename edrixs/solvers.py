@@ -20,7 +20,8 @@ from .angular_momentum import (
 )
 from .photon_transition import (
     get_trans_oper, quadrupole_polvec, dipole_polvec_xas,
-    dipole_polvec_rixs, unit_wavevector,
+    dipole_polvec_rixs, unit_wavevector, powder_average,
+    _normalize_polarization_kind,
 )
 from .coulomb_utensor import get_umat_slater
 from .manybody_operator import two_fermion, four_fermion
@@ -626,7 +627,7 @@ def xas_1v1c_py(eval_i, eval_n, trans_op, ominc, *, gamma_c=0.1, thin=1.0, phi=0
         Azimuthal angle (in radian), defined with respect to the
         :math:`x`-axis of the scattering axis: scatter_axis[:,0].
     pol_type: list of tuples
-        Type of polarization, options can be:
+        Polarization or powder-averaging option. Choices are:
 
         - ('linear', alpha), linear polarization, where alpha is the angle between the
           polarization vector and the scattering plane in radians.
@@ -635,9 +636,9 @@ def xas_1v1c_py(eval_i, eval_n, trans_op, ominc, *, gamma_c=0.1, thin=1.0, phi=0
 
         - ('right', 0), right circular polarization.
 
-        - ('isotropic', 0). isotropic polarization.
+        - ('powder', 0), powder-averaged spectrum.
 
-        It will set pol_type=[('isotropic', 0)] if not provided.
+        It will set pol_type=[('powder', 0)] if not provided.
     gs_list: 1d list of ints
         The indices of initial states which will be used in XAS calculations.
 
@@ -671,7 +672,11 @@ def xas_1v1c_py(eval_i, eval_n, trans_op, ominc, *, gamma_c=0.1, thin=1.0, phi=0
     n_om = len(ominc)
     npol, ncfg_n = trans_op.shape[0], trans_op.shape[1]
     if pol_type is None:
-        pol_type = [('isotropic', 0)]
+        pol_type = [('powder', 0)]
+    pol_type = [
+        (_normalize_polarization_kind(kind), alpha)
+        for kind, alpha in pol_type
+    ]
     if gs_list is None:
         gs_list = [0]
     if scatter_axis is None:
@@ -690,10 +695,10 @@ def xas_1v1c_py(eval_i, eval_n, trans_op, ominc, *, gamma_c=0.1, thin=1.0, phi=0
     kvec = unit_wavevector(thin, phi, scatter_axis, 'in')
     for i, om in enumerate(ominc):
         for it, (pt, alpha) in enumerate(pol_type):
-            if pt.strip() not in ['left', 'right', 'linear', 'isotropic']:
+            if pt not in ['left', 'right', 'linear', 'powder']:
                 raise Exception("Unknown polarization type: ", pt)
             polvec = np.zeros(npol, dtype=complex)
-            if pt.strip() == 'left' or pt.strip() == 'right' or pt.strip() == 'linear':
+            if pt == 'left' or pt == 'right' or pt == 'linear':
                 pol = dipole_polvec_xas(thin, phi, alpha, scatter_axis, pt)
                 if npol == 3:  # dipolar transition
                     polvec[:] = pol
@@ -702,7 +707,7 @@ def xas_1v1c_py(eval_i, eval_n, trans_op, ominc, *, gamma_c=0.1, thin=1.0, phi=0
 
             # loop over all the initial states
             for j, igs in enumerate(gs_list):
-                if pt.strip() == 'isotropic':
+                if pt == 'powder':
                     for k in range(npol):
                         xas[i, it] += (
                             prob[j] * np.sum(np.abs(trans_op[k, :, igs])**2 * gamma_core[i] /
@@ -759,15 +764,18 @@ def rixs_1v1c_py(eval_i, eval_n, trans_op, ominc, eloss, *,
         Azimuthal angle (in radian), defined with respect to the
         :math:`x`-axis of scattering axis: scatter_axis[:,0].
     pol_type: list of 4-elements-tuples
-        Type of polarizations. It has the following form:
+        Polarization and powder-averaging specification. It has the following form:
 
         (str1, alpha, str2, beta)
 
-        where, str1 (str2) can be 'linear', 'left', 'right', 'isotropic' and alpha (beta) is
+        where, str1 (str2) can be 'linear', 'left', 'right', 'powder' and alpha (beta) is
         the angle (in radians) between the linear polarization vector and the scattering plane.
 
-        If str1 (or str2) is 'isotropic' then the polarization vector projects equally
-        along each axis and the other variables are ignored.
+        If str1 or str2 is 'powder', the E1-E1 powder average is calculated. A
+        'powder' entry denotes a linearly polarized photon at the angle alpha or beta;
+        the other entry may still select linear or circular polarization. The powder
+        average rotates the sample over all orientations while keeping these laboratory
+        polarization vectors fixed.
 
         It will set pol_type=[('linear', 0, 'linear', 0)] if not provided.
     gs_list: 1d list of ints
@@ -820,6 +828,11 @@ def rixs_1v1c_py(eval_i, eval_n, trans_op, ominc, eloss, *,
 
     if pol_type is None:
         pol_type = [('linear', 0, 'linear', 0)]
+    pol_type = [
+        (_normalize_polarization_kind(incoming), alpha,
+         _normalize_polarization_kind(outgoing), beta)
+        for incoming, alpha, outgoing, beta in pol_type
+    ]
     if gs_list is None:
         gs_list = [0]
     if scatter_axis is None:
@@ -842,12 +855,17 @@ def rixs_1v1c_py(eval_i, eval_n, trans_op, ominc, eloss, *,
                               trans_emi, om, gamma_core[i])
 
         for j, (it, alpha, jt, beta) in enumerate(pol_type):
+            do_powder_average = it == 'powder' or jt == 'powder'
+            pol_types = (
+                'linear' if it == 'powder' else it,
+                'linear' if jt == 'powder' else jt,
+            )
             ei, ef = dipole_polvec_rixs(thin, thout, phi, alpha, beta,
-                                        scatter_axis, (it, jt))
-            if it.lower() == 'isotropic':
-                ei = np.ones(3)/np.sqrt(3)                        # Powder spectrum
-            if jt.lower() == 'isotropic':
-                ef = np.ones(3)/np.sqrt(3)
+                                        scatter_axis, pol_types)
+            if do_powder_average and npol != 3:
+                raise NotImplementedError(
+                    "Powder averaging is currently implemented only for E1-E1 RIXS"
+                )
             # dipolar transition
             if npol == 3:
                 polvec_i[:] = ei
@@ -860,11 +878,17 @@ def rixs_1v1c_py(eval_i, eval_n, trans_op, ominc, eloss, *,
                 polvec_f[:] = quadrupole_polvec(ef, kf)
             else:
                 raise Exception("Have NOT implemented this type of transition operators")
-            # scattering magnitude with polarization vectors
-            F_mag = np.zeros((len(eval_i), len(gs_list)), dtype=complex)
-            for m in range(npol):
-                for n in range(npol):
-                    F_mag[:, :] += np.conj(polvec_f[m]) * F_fi[m, n] * polvec_i[n]
+            if do_powder_average:
+                # F_fi is indexed as (outgoing, incoming, final, initial).
+                scattering_tensor = np.moveaxis(F_fi, (0, 1), (-2, -1))
+                F_mag_sq = powder_average(scattering_tensor, ei, ef)
+            else:
+                # scattering magnitude with polarization vectors
+                F_mag = np.zeros((len(eval_i), len(gs_list)), dtype=complex)
+                for m in range(npol):
+                    for n in range(npol):
+                        F_mag[:, :] += np.conj(polvec_f[m]) * F_fi[m, n] * polvec_i[n]
+                F_mag_sq = np.abs(F_mag)**2
 
             fs_list = np.arange(len(eval_i))
             if skip_gs:
@@ -872,7 +896,7 @@ def rixs_1v1c_py(eval_i, eval_n, trans_op, ominc, eloss, *,
             for m, igs in enumerate(gs_list):
                 for n in fs_list:
                     rixs[i, :, j] += (
-                        prob[m] * np.abs(F_mag[n, igs])**2 * gamma_final / np.pi /
+                        prob[m] * F_mag_sq[n, igs] * gamma_final / np.pi /
                         ((eloss - (eval_i[n] - eval_i[igs]))**2 + gamma_final**2)
                     )
     print("edrixs >>> RIXS Done !")
@@ -1075,9 +1099,9 @@ def xas_1v1c_fort(comm, shell_name, ominc, *, gamma_c=0.1,
 
         - ('right', 0), right circular polarization.
 
-        - ('isotropic', 0). isotropic polarization.
+        - ('powder', 0), powder-averaged spectrum.
 
-        It will set pol_type=[('isotropic', 0)] if not provided.
+        It will set pol_type=[('powder', 0)] if not provided.
     num_gs: int
         Number of initial states used in XAS calculations.
     nkryl: int
@@ -1487,9 +1511,9 @@ def xas_2v1c_fort(comm, shell_name, ominc, *, gamma_c=0.1,
 
         - ('right', 0), right circular polarization.
 
-        - ('isotropic', 0). isotropic polarization.
+        - ('powder', 0), powder-averaged spectrum.
 
-        It will set pol_type=[('isotropic', 0)] if not provided.
+        It will set pol_type=[('powder', 0)] if not provided.
     num_gs: int
         Number of initial states used in XAS calculations.
     nkryl: int
@@ -2168,7 +2192,7 @@ def xas_siam_fort(comm, shell_name, nbath, ominc, *, gamma_c=0.1,
         Azimuthal angle (in radian), defined with respect to the
         :math:`x`-axis of the local scattering axis: scatter_axis[:,0].
     pol_type: list of tuples
-        Type of polarization, options can be:
+        Polarization or powder-averaging option. Choices are:
 
         - ('linear', alpha), linear polarization, where alpha is the angle between the
           polarization vector and the scattering plane in radians.
@@ -2177,9 +2201,9 @@ def xas_siam_fort(comm, shell_name, nbath, ominc, *, gamma_c=0.1,
 
         - ('right', 0), right circular polarization.
 
-        - ('isotropic', 0). isotropic polarization.
+        - ('powder', 0), powder-averaged spectrum.
 
-        It will set pol_type=[('isotropic', 0)] if not provided.
+        It will set pol_type=[('powder', 0)] if not provided.
     num_gs: int
         Number of initial states used in XAS calculations.
     nkryl: int
@@ -2243,7 +2267,7 @@ def xas_siam_fort(comm, shell_name, nbath, ominc, *, gamma_c=0.1,
     ntot_v = v_norb * (nbath + 1)
     ntot = ntot_v + c_norb
     if pol_type is None:
-        pol_type = [('isotropic', 0)]
+        pol_type = [('powder', 0)]
     if loc_axis is None:
         loc_axis = np.eye(3)
     else:
@@ -2295,12 +2319,13 @@ def xas_siam_fort(comm, shell_name, nbath, ominc, *, gamma_c=0.1,
     poles = []
     comm.Barrier()
     for it, (pt, alpha) in enumerate(pol_type):
-        if pt.strip() == 'left' or pt.strip() == 'right' or pt.strip() == 'linear':
+        pt_type = _normalize_polarization_kind(pt)
+        if pt_type == 'left' or pt_type == 'right' or pt_type == 'linear':
             if rank == 0:
                 print("edrixs >>> Loop over for polarization: ", it, pt, flush=True)
                 kvec = unit_wavevector(thin, phi, scatter_axis, 'in')
                 polvec = np.zeros(npol, dtype=complex)
-                pol = dipole_polvec_xas(thin, phi, alpha, scatter_axis, pt)
+                pol = dipole_polvec_xas(thin, phi, alpha, scatter_axis, pt_type)
                 if npol == 3:  # Dipolar transition
                     polvec[:] = pol
                 if npol == 5:  # Quadrupolar transition
@@ -2320,12 +2345,12 @@ def xas_siam_fort(comm, shell_name, nbath, ominc, *, gamma_c=0.1,
             pole_dict = read_poles_from_file(file_list)
             poles.append(pole_dict)
             xas[:, it] = get_spectra_from_poles(pole_dict, ominc, gamma_core, temperature)
-        elif pt.strip() == 'isotropic':
+        elif pt_type == 'powder':
             pole_dicts = []
             for k in range(npol):
                 if rank == 0:
                     print("edrixs >>> Loop over for polarization: ", it, pt, flush=True)
-                    print("edrixs >>> Isotropic, component: ", k, flush=True)
+                    print("edrixs >>> Powder average, component: ", k, flush=True)
                     write_emat(trans_mat[k], 'transop_xas.in')
 
                 # call XAS solver in fedrixs

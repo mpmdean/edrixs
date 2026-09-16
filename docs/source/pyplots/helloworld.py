@@ -48,8 +48,8 @@ gamma_f = 0.1  # final states
 # for the defintion of the scattering angles.
 thin, thout, phi = 15 / 180.0 * np.pi, 75 / 180.0 * np.pi, 0.0
 
-# Polarization types
-poltype_xas = [('isotropic', 0.0)]  # for XAS
+# Polarization and powder-averaging types
+poltype_xas = [('powder', 0.0)]  # for XAS
 poltype_rixs = [('linear', 0, 'linear', 0), ('linear', 0, 'linear', np.pi/2.0)]  # for RIXS
 
 # Energy grid
@@ -100,7 +100,7 @@ plt.grid()
 plt.plot(ominc_xas, xas[:, 0], '-')
 plt.xlabel(r'Incident Energy (eV)')
 plt.ylabel(r'XAS Intensity (a.u.)')
-plt.title(r'(b) Isotropic XAS')
+plt.title(r'(b) Powder XAS')
 
 ax3 = plt.subplot(2, 2, 3)
 plt.imshow(np.sum(rixs_L3, axis=2),

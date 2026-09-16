@@ -260,10 +260,6 @@ def _rixs_polarization_vectors(
         thin, thout, phi, alpha, beta, scatter_axis,
         (incoming_kind, outgoing_kind),
     )
-    if incoming_kind.lower() == 'isotropic':
-        incoming = np.ones(3, dtype=complex) / np.sqrt(3.0)
-    if outgoing_kind.lower() == 'isotropic':
-        outgoing = np.ones(3, dtype=complex) / np.sqrt(3.0)
 
     incoming_vector = np.zeros(ntrans, dtype=complex)
     outgoing_vector = np.zeros(ntrans, dtype=complex)
@@ -282,6 +278,38 @@ def _rixs_polarization_vectors(
     else:
         raise ValueError("ntrans must be 3 or 5")
     return incoming_vector, outgoing_vector
+
+
+def _rixs_polarization_data(
+        ntrans, thin, thout, phi, incoming_kind, alpha,
+        outgoing_kind, beta, scatter_axis):
+    """Prepare a conventional polarization pair or E1-E1 powder channels."""
+    from ..photon_transition import (
+        _normalize_polarization_kind, _powder_average_channels,
+    )
+
+    incoming_kind = _normalize_polarization_kind(incoming_kind)
+    outgoing_kind = _normalize_polarization_kind(outgoing_kind)
+    is_powder = incoming_kind == 'powder' or outgoing_kind == 'powder'
+    if is_powder and ntrans != 3:
+        raise NotImplementedError(
+            "Powder averaging is currently implemented only for E1-E1 RIXS"
+        )
+    physical_kinds = (
+        'linear' if incoming_kind == 'powder' else incoming_kind,
+        'linear' if outgoing_kind == 'powder' else outgoing_kind,
+    )
+    incoming, outgoing = _rixs_polarization_vectors(
+        ntrans, thin, thout, phi, physical_kinds[0], alpha,
+        physical_kinds[1], beta, scatter_axis,
+    )
+    return {
+        'incoming': incoming,
+        'outgoing': outgoing,
+        'powder_channels': (
+            _powder_average_channels(incoming, outgoing) if is_powder else None
+        ),
+    }
 
 
 def _apply_trans_combination(operators, coefficients, vector):
@@ -384,9 +412,9 @@ def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
     thin, phi : float, optional
         Incoming and azimuthal angles, in radians.
     pol_type : sequence of tuple, optional
-        Incoming polarizations. Each entry is ``(kind, alpha)`` where ``kind``
-        is ``'linear'``, ``'left'``, ``'right'``, or ``'isotropic'``. The
-        default is a single isotropic polarization.
+        Incoming polarization or powder average. Each entry is ``(kind, alpha)``
+        where ``kind`` is ``'linear'``, ``'left'``, ``'right'``, or ``'powder'``.
+        The default is a powder average.
     temperature : float, optional
         Temperature in kelvin used for the Boltzmann weights of ``eval_i``.
     scatter_axis : (3, 3) array, optional
@@ -407,7 +435,8 @@ def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
     from ..plot_spectrum import get_spectra_from_poles, merge_pole_dicts
     from .._solvers_helpers import _expand_broadening
     from ..photon_transition import (
-        dipole_polvec_xas, quadrupole_polvec, unit_wavevector,
+        _normalize_polarization_kind, dipole_polvec_xas,
+        quadrupole_polvec, unit_wavevector,
     )
 
     kws = _backend_kws(backend_kws)
@@ -429,7 +458,7 @@ def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
         )
 
     if pol_type is None:
-        pol_type = [('isotropic', 0)]
+        pol_type = [('powder', 0)]
     if scatter_axis is None:
         scatter_axis = np.eye(3)
     else:
@@ -444,8 +473,8 @@ def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
     xas = np.zeros((n_om, len(pol_type)), dtype=float)
     poles = []
     for it, (pt, alpha) in enumerate(pol_type):
-        kind = pt.strip().lower()
-        if kind == 'isotropic':
+        kind = _normalize_polarization_kind(pt)
+        if kind == 'powder':
             # Sum over the Cartesian (or spherical) components individually.
             pole_dicts = []
             for k in range(ntrans):
@@ -587,7 +616,7 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     gamma_final = _expand_broadening(gamma_f, neloss, 'gamma_f')
 
     polarizations = [
-        _rixs_polarization_vectors(
+        _rixs_polarization_data(
             ntrans, thin, thout, phi,
             incoming_kind, alpha, outgoing_kind, beta, scatter_axis,
         )
@@ -605,7 +634,7 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     poles = []
     for iom, omega in enumerate(ominc):
         poles_per_om = []
-        for ip, (polvec_i, polvec_f) in enumerate(polarizations):
+        for ip, polarization in enumerate(polarizations):
             pole_dict = {'npoles': [], 'eigval': [], 'norm': [],
                          'alpha': [], 'beta': []}
             for ig in range(num_gs):
@@ -618,35 +647,66 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
                 shifted.shift(z)
                 ksp.setOperators(shifted)
 
-                # RHS: D_k |i>  (initial -> intermediate)
-                rhs = _apply_trans_combination(trans_op, polvec_i, evec_i[ig])
-                sol = rhs.duplicate()
-                sol.zeroEntries()
-                ksp.solve(rhs, sol)
-                if ksp.getConvergedReason() < 0:
-                    raise RuntimeError(
-                        "KSP did not converge for omega={}, ig={}: reason={}".format(
-                            omega, ig, ksp.getConvergedReason()
-                        )
+                channels = polarization['powder_channels']
+                if channels is None:
+                    rhs = _apply_trans_combination(
+                        trans_op, polarization['incoming'], evec_i[ig]
                     )
+                    solutions = [_solve_shifted_petsc(
+                        ksp, rhs, omega=omega, initial_index=ig
+                    )]
+                    seeds = [_apply_trans_combination_adjoint(
+                        trans_op, np.conj(polarization['outgoing']), solutions[0]
+                    )]
+                else:
+                    solutions = []
+                    for incoming_component in range(3):
+                        coefficients = np.zeros(3, dtype=complex)
+                        coefficients[incoming_component] = 1.0
+                        rhs = _apply_trans_combination(
+                            trans_op, coefficients, evec_i[ig]
+                        )
+                        solutions.append(_solve_shifted_petsc(
+                            ksp,
+                            rhs,
+                            omega=omega,
+                            initial_index=ig,
+                            component=incoming_component,
+                        ))
+                    seeds = []
+                    for channel in channels:
+                        seed = None
+                        for incoming_component, solution in enumerate(solutions):
+                            term = _apply_trans_combination_adjoint(
+                                trans_op,
+                                channel[:, incoming_component],
+                                solution,
+                            )
+                            if seed is None:
+                                seed = term
+                            else:
+                                seed.axpy(1.0, term)
+                        seeds.append(seed)
 
-                # Final-state seed: D_k'^dagger x  (intermediate -> initial)
-                seed = _apply_trans_combination_adjoint(
-                    trans_op, np.conj(polvec_f), sol
-                )
+                num_channels = len(seeds)
+                for seed in seeds:
+                    if skip_gs:
+                        for gs_vec in evec_i:
+                            seed.axpy(-gs_vec.dot(seed), gs_vec)
 
-                if skip_gs:
-                    for gs_vec in evec_i:
-                        seed.axpy(-gs_vec.dot(seed), gs_vec)
-
-                alpha_i, beta_i, norm_i = lanczos_tridiagonal(
-                    hmat_i, seed, nkryl=nkryl
-                )
-                pole_dict['npoles'].append(len(alpha_i))
-                pole_dict['eigval'].append(eval_i[ig])
-                pole_dict['norm'].append(norm_i)
-                pole_dict['alpha'].append(alpha_i)
-                pole_dict['beta'].append(beta_i)
+                    if seed.norm() == 0:
+                        alpha_i = np.array([0.0], dtype=float)
+                        beta_i = np.array([], dtype=float)
+                        norm_i = 0.0
+                    else:
+                        alpha_i, beta_i, norm_i = lanczos_tridiagonal(
+                            hmat_i, seed, nkryl=nkryl
+                        )
+                    pole_dict['npoles'].append(len(alpha_i))
+                    pole_dict['eigval'].append(eval_i[ig])
+                    pole_dict['norm'].append(norm_i * num_channels)
+                    pole_dict['alpha'].append(alpha_i)
+                    pole_dict['beta'].append(beta_i)
 
             poles_per_om.append(pole_dict)
             rixs[iom, :, ip] = get_spectra_from_poles(
@@ -655,3 +715,22 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         poles.append(poles_per_om)
 
     return (rixs, poles) if return_poles else rixs
+
+
+def _solve_shifted_petsc(ksp, rhs, *, omega, initial_index, component=None):
+    """Solve one already-configured shifted PETSc RIXS system."""
+    solution = rhs.duplicate()
+    solution.zeroEntries()
+    if rhs.norm() == 0:
+        return solution
+    ksp.solve(rhs, solution)
+    if ksp.getConvergedReason() < 0:
+        context = "omega={}, ig={}".format(omega, initial_index)
+        if component is not None:
+            context += ", component={}".format(component)
+        raise RuntimeError(
+            "KSP did not converge for {}: reason={}".format(
+                context, ksp.getConvergedReason()
+            )
+        )
+    return solution

@@ -26,7 +26,7 @@ def test_public_xas_matches_existing_dense_solver(small_1v1c_problem):
 
     Both paths start from the same setup output and initial states, apply photon
     transitions, evaluate the intermediate response, apply broadening, and
-    return the final incident-energy spectrum for linear and isotropic light.
+    return the final incident-energy spectrum for linear light and a powder average.
     """
     _, hmat_n, transitions, eval_i, evec_i, eval_n, trans_eig = (
         exact_1v1c_reference_data(small_1v1c_problem)
@@ -34,7 +34,7 @@ def test_public_xas_matches_existing_dense_solver(small_1v1c_problem):
     kept = [0]
     center = float(np.median(eval_n) - eval_i[0])
     ominc = np.linspace(center - 0.8, center + 0.8, 9)
-    pol_type = [("linear", 0.2), ("isotropic", 0.0)]
+    pol_type = [("linear", 0.2), ("powder", 0.0)]
 
     sparse_result = xas(
         eval_i[kept],

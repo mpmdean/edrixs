@@ -89,7 +89,7 @@ if __name__ == "__main__":
         else:
             gamma_c[i] = 6.5 / 2.0
 
-    poltype_xas = [('isotropic', 0.0)]
+    poltype_xas = [('powder', 0.0)]
     poltype_rixs = [('linear', 0.0, 'linear', 0.0),
                     ('linear', 0.0, 'linear', np.pi / 2.0),
                     ('linear', np.pi / 2.0, 'linear', 0.0),

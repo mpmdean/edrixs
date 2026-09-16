@@ -13,7 +13,9 @@ from scipy.sparse.linalg import LinearOperator, aslinearoperator, gmres, lobpcg
 from .._solvers_helpers import _expand_broadening
 from .krylov import lanczos_tridiagonal
 from ..photon_transition import (
-    dipole_polvec_xas, dipole_polvec_rixs, quadrupole_polvec, unit_wavevector,
+    _normalize_polarization_kind, _powder_average_channels,
+    dipole_polvec_xas, dipole_polvec_rixs, quadrupole_polvec,
+    unit_wavevector,
 )
 from ..plot_spectrum import get_spectra_from_poles
 
@@ -560,9 +562,9 @@ def xas_krylov_scipy(
         Incoming angle and azimuthal angle, in radians.
 
     pol_type : sequence of tuple, optional
-        Incoming polarizations. Each entry is ``(kind, alpha)`` where ``kind``
-        is ``'linear'``, ``'left'``, ``'right'``, or ``'isotropic'``. The
-        default is isotropic polarization.
+        Incoming polarization or powder average. Each entry is ``(kind, alpha)``
+        where ``kind`` is ``'linear'``, ``'left'``, ``'right'``, or ``'powder'``.
+        The default is a powder average.
 
     temperature : float, optional
         Temperature in kelvin used for the Boltzmann weights of ``eval_i``.
@@ -608,7 +610,7 @@ def xas_krylov_scipy(
             )
 
     if pol_type is None:
-        pol_type = [('isotropic', 0.0)]
+        pol_type = [('powder', 0.0)]
     if scatter_axis is None:
         scatter_axis = np.eye(3)
     else:
@@ -625,8 +627,8 @@ def xas_krylov_scipy(
     wavevector = unit_wavevector(thin, phi, scatter_axis, direction='in')
 
     for polarization_index, (kind, alpha) in enumerate(pol_type):
-        kind = kind.strip().lower()
-        if kind == 'isotropic':
+        kind = _normalize_polarization_kind(kind)
+        if kind == 'powder':
             for component in range(ntrans):
                 starts = [
                     trans_op[component] @ evec_i[:, state]
@@ -692,10 +694,6 @@ def _rixs_polarization_vectors(
         thin, thout, phi, alpha, beta, scatter_axis,
         (incoming_kind, outgoing_kind),
     )
-    if incoming_kind.lower() == 'isotropic':
-        incoming = np.ones(3, dtype=complex) / np.sqrt(3.0)
-    if outgoing_kind.lower() == 'isotropic':
-        outgoing = np.ones(3, dtype=complex) / np.sqrt(3.0)
 
     incoming_vector = np.zeros(ntrans, dtype=complex)
     outgoing_vector = np.zeros(ntrans, dtype=complex)
@@ -720,6 +718,34 @@ def _rixs_polarization_vectors(
     return incoming_vector, outgoing_vector
 
 
+def _rixs_polarization_data(
+        ntrans, thin, thout, phi, incoming_kind, alpha,
+        outgoing_kind, beta, scatter_axis):
+    """Prepare a conventional polarization pair or E1-E1 powder channels."""
+    incoming_kind = _normalize_polarization_kind(incoming_kind)
+    outgoing_kind = _normalize_polarization_kind(outgoing_kind)
+    is_powder = incoming_kind == 'powder' or outgoing_kind == 'powder'
+    if is_powder and ntrans != 3:
+        raise NotImplementedError(
+            "Powder averaging is currently implemented only for E1-E1 RIXS"
+        )
+    physical_kinds = (
+        'linear' if incoming_kind == 'powder' else incoming_kind,
+        'linear' if outgoing_kind == 'powder' else outgoing_kind,
+    )
+    incoming, outgoing = _rixs_polarization_vectors(
+        ntrans, thin, thout, phi, physical_kinds[0], alpha,
+        physical_kinds[1], beta, scatter_axis,
+    )
+    return {
+        'incoming': incoming,
+        'outgoing': outgoing,
+        'powder_channels': (
+            _powder_average_channels(incoming, outgoing) if is_powder else None
+        ),
+    }
+
+
 def _rixs_krylov_one_contribution_scipy(
         *, hmat_i, hmat_n, trans_op_H, polvec_f, eval_i,
         istate, omega, gamma_c, rhs, nkryl, linsys_tol,
@@ -729,13 +755,38 @@ def _rixs_krylov_one_contribution_scipy(
     """
     initial_energy = eval_i[istate]
     if np.linalg.norm(rhs) == 0:
-        return {
-            'eigval': initial_energy,
-            'npoles': 1,
-            'norm': 0.0,
-            'alpha': np.array([0.0], dtype=float),
-            'beta': np.array([], dtype=float),
-        }
+        return _rixs_record_from_final_vector_scipy(
+            hmat_i,
+            np.zeros(hmat_i.shape[0], dtype=complex),
+            initial_energy,
+            nkryl,
+            excluded_vectors,
+        )
+    solution = _solve_rixs_intermediate_scipy(
+        hmat_n=hmat_n,
+        initial_energy=initial_energy,
+        omega=omega,
+        gamma_c=gamma_c,
+        rhs=rhs,
+        linsys_tol=linsys_tol,
+        linsys_maxiter=linsys_maxiter,
+        linsys_restart=linsys_restart,
+        context="istate={}, omega={}".format(istate, omega),
+    )
+    final_vector = _apply_linear_combination(
+        trans_op_H, np.conj(polvec_f), solution
+    )
+    return _rixs_record_from_final_vector_scipy(
+        hmat_i, final_vector, initial_energy, nkryl, excluded_vectors
+    )
+
+
+def _solve_rixs_intermediate_scipy(
+        *, hmat_n, initial_energy, omega, gamma_c, rhs, linsys_tol,
+        linsys_maxiter, linsys_restart, context):
+    """Solve one shifted intermediate-state system for RIXS."""
+    if np.linalg.norm(rhs) == 0:
+        return np.zeros(hmat_n.shape[0], dtype=complex)
 
     shift = omega + initial_energy + 1j * gamma_c
     linear_system = LinearOperator(
@@ -749,15 +800,14 @@ def _rixs_krylov_one_contribution_scipy(
     )
     if info != 0:
         raise RuntimeError(
-            "GMRES did not converge for istate={}, omega={}; info={}".format(
-                istate, omega, info
-            )
+            "GMRES did not converge for {}; info={}".format(context, info)
         )
+    return solution
 
-    final_vector = _apply_linear_combination(
-        trans_op_H, np.conj(polvec_f), solution
-    )
 
+def _rixs_record_from_final_vector_scipy(
+        hmat_i, final_vector, initial_energy, nkryl, excluded_vectors=None):
+    """Convert one final-state seed vector into a RIXS pole record."""
     if excluded_vectors is not None:
         final_vector = final_vector - excluded_vectors @ (
             excluded_vectors.conj().T @ final_vector
@@ -846,7 +896,7 @@ def _prepare_rixs(
     gamma_core = _expand_broadening(gamma_c, len(ominc), 'gamma_c')
     gamma_final = _expand_broadening(gamma_f, len(eloss), 'gamma_f')
     polarizations = [
-        _rixs_polarization_vectors(
+        _rixs_polarization_data(
             ntrans, thin, thout, phi,
             incoming_kind, alpha, outgoing_kind, beta, scatter_axis,
         )
@@ -877,6 +927,17 @@ def _pole_dict_from_records(records):
     Merge ordered per-initial-state records into one pole dictionary.
     """
     keys = ('npoles', 'eigval', 'norm', 'alpha', 'beta')
+    if records and isinstance(records[0], list):
+        num_channels = len(records[0])
+        flattened = []
+        for state_records in records:
+            if len(state_records) != num_channels:
+                raise ValueError("Powder channels must be consistent for all initial states")
+            for record in state_records:
+                scaled = dict(record)
+                scaled['norm'] *= num_channels
+                flattened.append(scaled)
+        records = flattened
     return {key: [record[key] for record in records] for key in keys}
 
 
@@ -895,18 +956,20 @@ def _compute_rixs_records(problem):
     ]
 
     for incident_index, omega in enumerate(problem['ominc']):
-        for polarization_index, (polvec_i, polvec_f) in enumerate(
-                problem['polarizations']):
+        for polarization_index, polarization in enumerate(problem['polarizations']):
             for initial_index in range(len(eval_i)):
-                rhs = _apply_linear_combination(
-                    trans_op, polvec_i, evec_i[:, initial_index]
-                )
-                records[incident_index][polarization_index][initial_index] = (
-                    _rixs_krylov_one_contribution_scipy(
+                channels = polarization['powder_channels']
+                if channels is None:
+                    rhs = _apply_linear_combination(
+                        trans_op,
+                        polarization['incoming'],
+                        evec_i[:, initial_index],
+                    )
+                    record = _rixs_krylov_one_contribution_scipy(
                         hmat_i=problem['hmat_i'],
                         hmat_n=problem['hmat_n'],
                         trans_op_H=trans_op_H,
-                        polvec_f=polvec_f,
+                        polvec_f=polarization['outgoing'],
                         eval_i=eval_i,
                         istate=initial_index,
                         omega=omega,
@@ -918,7 +981,40 @@ def _compute_rixs_records(problem):
                         linsys_restart=problem['linsys_restart'],
                         excluded_vectors=problem['excluded_vectors'],
                     )
-                )
+                else:
+                    solutions = []
+                    for incoming_component in range(3):
+                        rhs = trans_op[incoming_component] @ evec_i[:, initial_index]
+                        solutions.append(_solve_rixs_intermediate_scipy(
+                            hmat_n=problem['hmat_n'],
+                            initial_energy=eval_i[initial_index],
+                            omega=omega,
+                            gamma_c=problem['gamma_core'][incident_index],
+                            rhs=rhs,
+                            linsys_tol=problem['linsys_tol'],
+                            linsys_maxiter=problem['linsys_maxiter'],
+                            linsys_restart=problem['linsys_restart'],
+                            context="istate={}, omega={}, component={}".format(
+                                initial_index, omega, incoming_component
+                            ),
+                        ))
+                    record = []
+                    for channel in channels:
+                        final_vector = np.zeros(problem['hmat_i'].shape[0], dtype=complex)
+                        for incoming_component, solution in enumerate(solutions):
+                            final_vector += _apply_linear_combination(
+                                trans_op_H,
+                                channel[:, incoming_component],
+                                solution,
+                            )
+                        record.append(_rixs_record_from_final_vector_scipy(
+                            problem['hmat_i'],
+                            final_vector,
+                            eval_i[initial_index],
+                            problem['nkryl'],
+                            problem['excluded_vectors'],
+                        ))
+                records[incident_index][polarization_index][initial_index] = record
     return records
 
 

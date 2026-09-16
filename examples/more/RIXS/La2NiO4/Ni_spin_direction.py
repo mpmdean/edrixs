@@ -120,10 +120,10 @@ def get_xas(eval_i, eval_n, dipole_ops,
         Linear sigma
         Circular left
         Circular right
-        Isotropic
+        Powder
     '''
     poltype = [('linear', 0.0), ('linear', np.pi / 2.0),
-               ('left', 0.0), ('right', 0.0), ('isotropic', 0.0)]
+               ('left', 0.0), ('right', 0.0), ('powder', 0.0)]
     xas = edrixs.xas_1v1c_py(
         eval_i, eval_n, dipole_ops, om_mesh, gamma_c=gamma_c, thin=thin,
         phi=phi, pol_type=poltype, gs_list=[0, 1, 2], temperature=T
