@@ -106,7 +106,7 @@ def run(output_dir: Path) -> None:
         ("linear", np.pi / 2.0),
         ("left", 0.0),
         ("right", 0.0),
-        ("isotropic", 0.0),
+        ("powder", 0.0),
     ]
     poltype_rixs = [
         ("linear", 0.0, "linear", 0.0),
@@ -229,7 +229,7 @@ def run(output_dir: Path) -> None:
         np.column_stack((ominc_xas, xas)),
         header=(
             "energy_eV  linear_pi  linear_sigma  left_circular "
-            "right_circular  isotropic"
+            "right_circular  powder"
         ),
     )
 

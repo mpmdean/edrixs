@@ -156,7 +156,7 @@ def run(output_dir: Path) -> None:
 
     ominc_xas = parameters["om_shift"] + np.linspace(-15.0, 25.0, 1000)
     gamma_c = np.full(ominc_xas.shape, 0.48 / 2.0)
-    poltype_xas = [("isotropic", 0.0)]
+    poltype_xas = [("powder", 0.0)]
 
     problem = model_siam(
         parameters["shell_name"],
@@ -244,7 +244,7 @@ def run(output_dir: Path) -> None:
     np.savetxt(
         output_dir / "xas.dat",
         np.column_stack((ominc_xas, xas)),
-        header="incident_energy_eV  isotropic_xas",
+        header="incident_energy_eV  powder_xas",
     )
 
     fig, ax = plt.subplots()

@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # here, we use an energy dependent one to reproduce the experimental XAS spectrum
     gamma_c = 0.2
     gamma_f = 0.1
-    poltype_xas = [('isotropic', 0.0)]
+    poltype_xas = [('powder', 0.0)]
     poltype_rixs = [('linear', 0.0, 'linear', 0.0),
                     ('linear', 0.0, 'linear', np.pi / 2.0)]
     shell_name = ('f', 'd')

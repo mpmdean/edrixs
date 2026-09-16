@@ -93,17 +93,14 @@ def xas(eval_i, eval_n, T_abs):
     prob = edrixs.boltz_dist([eval_i[i] for i in gs], 300)
     off = 857.4  # offset of the energy of the incident x-ray
     Gam_c = 0.2  # core-hole life-time broadening
-    pol = np.array([1.0, 1.0, 1.0]) / np.sqrt(3.0)  # isotropic
     omega = np.linspace(-10, 20, 1000)
     xas = np.zeros(len(omega), dtype=float)
-    # Calculate XAS spectrum
+    # Calculate the powder-averaged XAS spectrum
     for i, om in enumerate(omega):
         for j in gs:
-            F_mag = (T_abs[0, :, j] * pol[0] +
-                     T_abs[1, :, j] * pol[1] +
-                     T_abs[2, :, j] * pol[2])
+            F_mag_sq = np.sum(np.abs(T_abs[:, :, j])**2, axis=0) / 3.0
 
-            xas[i] += prob[j] * np.sum(np.abs(F_mag)**2 * Gam_c / np.pi /
+            xas[i] += prob[j] * np.sum(F_mag_sq * Gam_c / np.pi /
                                        ((om - (eval_n[:] - eval_i[j]))**2 + Gam_c**2))
 
     # plot XAS

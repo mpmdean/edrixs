@@ -128,7 +128,7 @@ def run(
     gamma_c = 0.2
     gamma_f = 0.1
 
-    poltype_xas = [("isotropic", 0.0)]
+    poltype_xas = [("powder", 0.0)]
     poltype_rixs = [
         ("linear", 0.0, "linear", 0.0),
         ("linear", 0.0, "linear", np.pi / 2.0),
@@ -220,7 +220,7 @@ def run(
         np.savetxt(
             output_dir / "xas.dat",
             np.column_stack((ominc_xas, xas)),
-            header="incident_energy_eV  isotropic_xas",
+            header="incident_energy_eV  powder_xas",
         )
 
     rixs = None

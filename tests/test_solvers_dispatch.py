@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import scipy.sparse as sp
 
-from edrixs.solvers import build_op, ed, rixs, xas
+from edrixs.solvers import build_op, ed, rixs, xas, xas_1v1c_py
 
 
 def test_build_op_rejects_unknown_backend():
@@ -51,12 +51,102 @@ def test_public_xas_uses_inferred_scipy_backend():
         hmat_n,
         transitions,
         np.array([0.5, 1.0]),
-        pol_type=[("isotropic", 0.0)],
+        pol_type=[("powder", 0.0)],
         backend_kws={"nkryl": 2},
     )
 
     assert spectrum.shape == (2, 1)
     assert np.all(np.isfinite(spectrum))
+
+    with pytest.warns(DeprecationWarning, match="'isotropic'.*'powder'"):
+        alias_spectrum = xas(
+            np.array([0.0]),
+            np.array([[1.0], [0.0]]),
+            hmat_n,
+            transitions,
+            np.array([0.5, 1.0]),
+            pol_type=[("isotropic", 0.0)],
+            backend_kws={"nkryl": 2},
+        )
+    np.testing.assert_allclose(alias_spectrum, spectrum)
+
+
+@pytest.mark.filterwarnings("ignore:.*is deprecated; use .* instead.:DeprecationWarning")
+def test_legacy_xas_powder_is_incoherent_cartesian_average():
+    """The dense reference solver averages Cartesian intensities."""
+    eval_i = np.array([0.0])
+    eval_n = np.array([0.0])
+    trans_op = np.array([
+        1.0 + 0.5j, -0.2 + 0.8j, 0.7 - 0.4j
+    ])[:, None, None]
+    ominc = np.array([-0.3, 0.0, 0.6])
+    gamma_c = 0.2
+
+    result = xas_1v1c_py(
+        eval_i,
+        eval_n,
+        trans_op,
+        ominc,
+        gamma_c=gamma_c,
+        pol_type=[('powder', 0)],
+    )
+    with pytest.warns(DeprecationWarning, match="'isotropic'.*'powder'"):
+        alias_result = xas_1v1c_py(
+            eval_i,
+            eval_n,
+            trans_op,
+            ominc,
+            gamma_c=gamma_c,
+            pol_type=[('isotropic', 0)],
+        )
+
+    transition_strength = np.sum(np.abs(trans_op[:, 0, 0])**2) / 3.0
+    expected = transition_strength * gamma_c / np.pi / (ominc**2 + gamma_c**2)
+    np.testing.assert_allclose(result[:, 0], expected)
+    np.testing.assert_allclose(alias_result, result)
+
+
+def test_public_rixs_accepts_deprecated_isotropic_alias():
+    """RIXS maps the deprecated isotropic spelling to powder averaging."""
+    hmat_i = sp.diags([0.0, 0.8], format="csr")
+    hmat_n = sp.diags([1.5, 2.2], format="csr")
+    transitions = [
+        sp.eye(2, format="csr"),
+        sp.csr_matrix((2, 2)),
+        sp.csr_matrix((2, 2)),
+    ]
+    arguments = (
+        np.array([0.0]),
+        np.array([[1.0], [0.0]]),
+        hmat_i,
+        hmat_n,
+        transitions,
+        np.array([1.0]),
+        np.array([0.0, 0.5]),
+    )
+    keywords = {
+        "gamma_c": 0.2,
+        "gamma_f": 0.1,
+        "backend_kws": {
+            "nkryl": 2,
+            "linsys_tol": 1e-10,
+            "linsys_maxiter": 20,
+            "linsys_restart": 2,
+        },
+    }
+
+    expected = rixs(
+        *arguments,
+        pol_type=[("powder", 0.0, "linear", 0.0)],
+        **keywords,
+    )
+    with pytest.warns(DeprecationWarning, match="'isotropic'.*'powder'"):
+        actual = rixs(
+            *arguments,
+            pol_type=[("isotropic", 0.0, "linear", 0.0)],
+            **keywords,
+        )
+    np.testing.assert_allclose(actual, expected)
 
 
 def test_public_rixs_uses_inferred_scipy_backend():

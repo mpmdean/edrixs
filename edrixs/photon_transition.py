@@ -1,12 +1,81 @@
 __all__ = ['dipole_trans_oper', 'quadrupole_trans_oper', 'get_trans_oper',
            'unit_wavevector', 'wavevector_with_length', 'get_wavevector_rixs',
            'linear_polvec', 'dipole_polvec_rixs', 'dipole_polvec_xas',
-           'quadrupole_polvec']
+           'quadrupole_polvec', 'powder_average']
+
+import warnings
 
 import numpy as np
 from sympy.physics.wigner import clebsch_gordan
 from .basis_transform import tmat_c2r, tmat_r2c, tmat_c2j, cb_op2
 from .utils import case_to_shell_name, info_atomic_shell
+
+
+def _normalize_polarization_kind(kind):
+    """Return the canonical polarization name, warning for deprecated aliases."""
+    normalized = kind.strip().lower()
+    if normalized == 'isotropic':
+        warnings.warn(
+            "'isotropic' polarization is deprecated; use 'powder' instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return 'powder'
+    return normalized
+
+
+def _powder_average_channels(incident_pol, outgoing_pol):
+    """Return coherent Cartesian channels whose intensities form a powder average."""
+    incident_pol = np.asarray(incident_pol)
+    outgoing_pol = np.asarray(outgoing_pol)
+    geometry = np.array([
+        np.vdot(outgoing_pol, outgoing_pol).real * np.vdot(incident_pol, incident_pol).real,
+        np.abs(np.vdot(outgoing_pol, incident_pol))**2,
+        np.abs(np.dot(outgoing_pol, incident_pol))**2,
+    ])
+    gram = np.array([
+        [4.0, -1.0, -1.0],
+        [-1.0, 4.0, -1.0],
+        [-1.0, -1.0, 4.0],
+    ])
+    norm_weight, trace_weight, transpose_weight = np.dot(geometry, gram) / 30.0
+
+    trace_vector = np.eye(3).reshape(9)
+    transpose = np.zeros((9, 9), dtype=float)
+    for outgoing in range(3):
+        for incoming in range(3):
+            transpose[3 * outgoing + incoming, 3 * incoming + outgoing] = 1.0
+    metric = (
+        norm_weight * np.eye(9)
+        + trace_weight * np.outer(trace_vector, trace_vector)
+        + transpose_weight * transpose
+    )
+    metric = (metric + metric.T) / 2.0
+    eigenvalues, eigenvectors = np.linalg.eigh(metric)
+    tolerance = np.finfo(float).eps * 100 * max(1.0, np.max(np.abs(eigenvalues)))
+    if np.any(eigenvalues < -tolerance):
+        raise ValueError("Powder-average metric is not positive semidefinite")
+    keep = eigenvalues > tolerance
+    return (
+        np.sqrt(eigenvalues[keep])[:, np.newaxis]
+        * eigenvectors[:, keep].T
+    ).reshape(-1, 3, 3)
+
+
+def powder_average(scattering_tensor, incident_pol, outgoing_pol):
+    """Return the E1-E1 RIXS orientational average for a powder.
+
+    This implements Eq. (26) of S. Zhang et al., Phys. Rev. B 114,
+    045133 (2026). The last two axes of ``scattering_tensor`` are the
+    outgoing and incoming Cartesian components, respectively.
+    """
+    scattering_tensor = np.asarray(scattering_tensor)
+    if scattering_tensor.shape[-2:] != (3, 3):
+        raise ValueError("E1-E1 powder averaging requires a 3x3 scattering tensor")
+
+    channels = _powder_average_channels(incident_pol, outgoing_pol)
+    amplitudes = np.einsum('qij,...ij->q...', channels, scattering_tensor)
+    return np.sum(np.abs(amplitudes)**2, axis=0).real
 
 
 def dipole_trans_oper(l1, l2):
@@ -455,8 +524,6 @@ def dipole_polvec_rixs(thin, thout, phi=0, alpha=0, beta=0, local_axis=None, pol
         ei_global = (ex + 1j * ey) / np.sqrt(2.0)
     elif pol_type[0].strip() == 'right':
         ei_global = (ex - 1j * ey) / np.sqrt(2.0)
-    elif pol_type[0].strip() == 'isotropic':
-        ei_global = np.ones(3)/np.sqrt(3)                        # Powder spectrum
     else:
         raise Exception("Unknown polarization type for incident photon: ", pol_type[0])
 
@@ -468,9 +535,6 @@ def dipole_polvec_rixs(thin, thout, phi=0, alpha=0, beta=0, local_axis=None, pol
         ef_global = (ex + 1j * ey) / np.sqrt(2.0)
     elif pol_type[1].strip() == 'right':
         ef_global = (ex - 1j * ey) / np.sqrt(2.0)
-    elif pol_type[0].strip() == 'isotropic':
-        ef_global = np.ones(3)/np.sqrt(3)
-
     else:
         raise Exception("Unknown polarization type for scattered photon: ", pol_type[1])
 
