@@ -455,11 +455,11 @@ def rixs_1v1c_py(eval_i, eval_n, trans_op, ominc, eloss, *,
 
         (str1, alpha, str2, beta)
 
-        where, str1 (str2) can be 'linear', 'left', 'right', 'isotropic' and alpha (beta) is
+        where, str1 (str2) can be 'linear', 'left', or 'right' and alpha (beta) is
         the angle (in radians) between the linear polarization vector and the scattering plane.
 
-        If str1 (or str2) is 'isotropic' then the polarization vector projects equally
-        along each axis and the other variables are ignored.
+        ``'isotropic'`` is not supported for RIXS; passing it emits a
+        :class:`UserWarning` and raises :class:`ValueError`.
 
         It will set pol_type=[('linear', 0, 'linear', 0)] if not provided.
     gs_list: 1d list of ints
@@ -532,10 +532,6 @@ def rixs_1v1c_py(eval_i, eval_n, trans_op, ominc, eloss, *,
         for j, (it, alpha, jt, beta) in enumerate(pol_type):
             ei, ef = dipole_polvec_rixs(thin, thout, phi, alpha, beta,
                                         scatter_axis, (it, jt))
-            if it.lower() == 'isotropic':
-                ei = np.ones(3)/np.sqrt(3)                        # Powder spectrum
-            if jt.lower() == 'isotropic':
-                ef = np.ones(3)/np.sqrt(3)
             # dipolar transition
             if npol == 3:
                 polvec_i[:] = ei
