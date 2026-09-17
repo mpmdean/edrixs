@@ -3,7 +3,9 @@
 import numpy as np
 import scipy.sparse as sp
 
-from .iostream import write_emat, write_umat, write_config, read_poles_from_file
+from .fortran_backend.iostream_fortran import (
+    read_poles_from_file, write_config, write_emat, write_umat,
+)
 from .angular_momentum import (
     get_sx, get_sy, get_sz, get_lx, get_ly, get_lz, rmat_to_euler, get_wigner_dmat
 )
@@ -14,7 +16,7 @@ from .coulomb_utensor import get_umat_slater, get_umat_slater_3shells
 from .fock_basis import write_fock_dec_by_N
 from .basis_transform import tmat_r2c
 from .utils import info_atomic_shell, slater_integrals_name
-from .plot_spectrum import get_spectra_from_poles, merge_pole_dicts
+from .poles import get_spectra_from_poles, merge_pole_dicts
 from .soc import atom_hsoc
 
 
@@ -22,6 +24,7 @@ def _infer_backend(*operators):
     """Infer which backend owns every supplied operator."""
     from .petsc_backend import petsc_backend
     from .scipy_backend import scipy_backend
+    from .fortran_backend import fortran_backend
 
     owned_by_scipy = bool(operators) and all(
         scipy_backend.owns_operator_scipy(operator) for operator in operators
@@ -29,18 +32,23 @@ def _infer_backend(*operators):
     owned_by_petsc = bool(operators) and all(
         petsc_backend.owns_operator_petsc(operator) for operator in operators
     )
+    owned_by_fortran = bool(operators) and all(
+        fortran_backend.owns_operator_fortran(operator) for operator in operators
+    )
 
-    match owned_by_scipy, owned_by_petsc:
-        case True, False:
+    match owned_by_scipy, owned_by_petsc, owned_by_fortran:
+        case True, False, False:
             return 'scipy'
-        case False, True:
+        case False, True, False:
             return 'petsc'
-        case False, False:
+        case False, False, True:
+            return 'fortran'
+        case False, False, False:
             raise TypeError(
                 "Could not infer a backend from the supplied operators; "
-                "pass backend='scipy' or backend='petsc' explicitly"
+                "pass backend='scipy', backend='petsc', or backend='fortran' explicitly"
             )
-        case True, True:
+        case _:
             raise TypeError(
                 "Backend inference is ambiguous; pass backend explicitly"
             )
