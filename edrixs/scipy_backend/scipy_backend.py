@@ -692,10 +692,6 @@ def _rixs_polarization_vectors(
         thin, thout, phi, alpha, beta, scatter_axis,
         (incoming_kind, outgoing_kind),
     )
-    if incoming_kind.lower() == 'isotropic':
-        incoming = np.ones(3, dtype=complex) / np.sqrt(3.0)
-    if outgoing_kind.lower() == 'isotropic':
-        outgoing = np.ones(3, dtype=complex) / np.sqrt(3.0)
 
     incoming_vector = np.zeros(ntrans, dtype=complex)
     outgoing_vector = np.zeros(ntrans, dtype=complex)
