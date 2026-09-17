@@ -1,0 +1,13 @@
+name: Test Docker image
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  docker-smoke-test:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/docker-build.yml
