@@ -43,7 +43,9 @@ and activate the build environment::
     mamba create --name edrixs_env -c conda-forge --strict-channel-priority \
         python=3.14 "numpy>=2" scipy sympy matplotlib mpi4py \
         "arpack=*=mpi_openmpi*" openmpi gfortran \
-        "libblas=*=*openblas" cmake ninja pip setuptools wheel \
+        "libblas=*=*openblas" \
+        "petsc=*=complex*" "slepc=*=complex*" petsc4py slepc4py \
+        cmake ninja pip setuptools wheel \
         sphinx ipython numpydoc pillow sphinx-copybutton sphinx-gallery \
         sphinx_rtd_theme pytest
     conda activate edrixs_env
@@ -79,6 +81,9 @@ requirements. The supported versions and required components are:
    * BLAS and LAPACK; OpenBLAS 0.3 is used in the recommended environment
    * `ARPACK-NG <https://github.com/opencollab/arpack-ng/>`_ 3.9 or newer,
      built with MPI support
+   * PETSc and SLEPc built with double-precision complex scalars
+     (``complex128``), together with petsc4py and slepc4py, for the PETSc
+     backend
 
 Install with Docker on Windows
 ==============================
