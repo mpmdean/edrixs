@@ -3,6 +3,8 @@ __all__ = ['dipole_trans_oper', 'quadrupole_trans_oper', 'get_trans_oper',
            'linear_polvec', 'dipole_polvec_rixs', 'dipole_polvec_xas',
            'quadrupole_polvec']
 
+import warnings
+
 import numpy as np
 from sympy.physics.wigner import clebsch_gordan
 from .basis_transform import tmat_c2r, tmat_r2c, tmat_c2j, cb_op2
@@ -428,6 +430,9 @@ def dipole_polvec_rixs(thin, thout, phi=0, alpha=0, beta=0, local_axis=None, pol
         - 'left'  : Left-circular polarization.
         - 'right' : Right-circular polarization.
 
+        ``'isotropic'`` is not supported for RIXS; passing it emits a
+        :class:`UserWarning` and raises :class:`ValueError`.
+
         It will set pol_type=('linear', 'linear') if not provided.
 
     Returns
@@ -446,6 +451,13 @@ def dipole_polvec_rixs(thin, thout, phi=0, alpha=0, beta=0, local_axis=None, pol
 
     if pol_type is None:
         pol_type = ('linear', 'linear')
+    if any(kind.strip().lower() == 'isotropic' for kind in pol_type):
+        message = (
+            "'isotropic' polarization is not supported for RIXS; "
+            "use 'linear', 'left', or 'right'."
+        )
+        warnings.warn(message, UserWarning, stacklevel=2)
+        raise ValueError(message)
 
     ex = linear_polvec(thin, phi, 0, local_axis, direction='in')
     ey = linear_polvec(thin, phi, np.pi/2.0, local_axis, direction='in')
