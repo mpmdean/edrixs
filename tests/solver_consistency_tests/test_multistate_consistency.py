@@ -87,7 +87,7 @@ def test_rixs_two_initial_states_match_dense(small_1v1c_problem):
     gamma_f = np.linspace(0.055, 0.085, len(eloss))
     pol_type = [
         ("left", 0.0, "right", 0.0),
-        ("isotropic", 0.0, "linear", 0.2),
+        ("linear", -0.35, "linear", 0.2),
     ]
 
     actual = rixs(
