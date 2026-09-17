@@ -25,6 +25,7 @@ included in EDRIXS, describing what they are and what they do.
    manybody_operator
    models
    photon_transition
+   poles
    plot_spectrum
    rixs_utils
    soc
