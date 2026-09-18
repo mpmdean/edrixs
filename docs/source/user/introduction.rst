@@ -169,7 +169,7 @@ different emitted polarizations and sum them, since this is what happens for
 RIXS with no scattered-polarization analysis.
 
 See :ref:`sphx_glr_auto_examples_example_02_single_atom_RIXS.py` for a fully
-worked calculation of the 
+worked calculation of the
 :func:`~edrixs.models.model_1v1c` model including plotting the
 incident-energy / energy-loss map. Other models have more parameters
 to pay attention to but are, in most ways, not fundamentally more complicated.

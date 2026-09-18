@@ -25,7 +25,7 @@ Energies and naming
   Slater integrals. EDRIXS ships Hartree-Fock values for these integrals in
   :func:`~edrixs.utils.get_atom_data` and provides conversions between from
   other common parameterizations such as the Racah parameters in
-  :func:`~edrixs.utils`. The magnitude of the Hartree-Fock values are 
+  :func:`~edrixs.utils`. The magnitude of the Hartree-Fock values are
   usually **scaled down** to 70-90% of their  to approximate
   screening in the solid.
 * **Core-level energies.** The absolute energy of a core level is not defined
