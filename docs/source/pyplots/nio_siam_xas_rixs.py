@@ -65,6 +65,10 @@ bath_level_n = E_Lc + bath_splitting[np.newaxis, :]
 hyb = np.zeros((nbath, norb_d), dtype=complex)
 hyb[0] = np.repeat([2.06, 1.21, 1.21, 2.06, 1.21], 2)
 
+# Effective exchange field along the [112] direction.
+exchange = 6 * 0.027
+ext_B = exchange / (2 * np.sqrt(6)) * np.array([1.0, 1.0, 2.0])
+
 # The core-level shift places the calculated spectrum near the Ni L edge.
 edge_shift = 857.6
 c_level = -edge_shift - 5 * E_p
@@ -82,7 +86,7 @@ problem = edrixs.model_siam(
     bath_level_n=bath_level_n,
     hyb=hyb,
     slater=slater,
-    ext_B=np.array([0.0, 0.0, 0.12]),
+    ext_B=ext_B,
     on_which='spin',
     sparse_U=True,
 )

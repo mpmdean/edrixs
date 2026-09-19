@@ -38,6 +38,11 @@ Fock-basis encoding and spectral conventions are collected separately on the
 :ref:`conventions` page, and the :ref:`pedagogical examples <examples>` work
 through the same material in more physical detail.
 
+If you prefer to begin with a complete calculation, skip ahead to either the
+:ref:`NiO crystal-field example <nio-l23-xas>` or the
+:ref:`NiO Anderson impurity example <nio-siam-xas-rixs>` and return to this
+overview as needed.
+
 .. _physical-model:
 
 The physical model
@@ -185,3 +190,7 @@ Where to go next
 * :ref:`examples` -- pedagogical scripts that build up each concept above with
   physical commentary.
 * :ref:`reference` -- the full API reference.
+
+To put the complete workflow into practice, continue with the
+:ref:`NiO crystal-field example <nio-l23-xas>` or the
+:ref:`NiO Anderson impurity example <nio-siam-xas-rixs>`.

@@ -265,9 +265,10 @@ gamma_c = np.full(ominc_xas.shape, 0.48/2)
 # instead applies it to spin only, which is a convenient way to impose a
 # magnetic order direction on the sample. The Bohr magneton
 # :math:`\mu_B = 5.7883818012\times 10^{-5}` eV/T is useful for converting
-# a physical field strength. Here we mimic magnetic order by applying a small
-# spin field along :math:`z`.
-ext_B = np.array([0.00, 0.00, 0.12])
+# a physical field strength. Here we mimic magnetic order with an exchange
+# energy of :math:`6 \times 0.027` eV directed along :math:`[112]`.
+exchange = 6 * 0.027
+ext_B = exchange / (2 * np.sqrt(6)) * np.array([1.0, 1.0, 2.0])
 on_which = 'spin'
 
 ################################################################################
