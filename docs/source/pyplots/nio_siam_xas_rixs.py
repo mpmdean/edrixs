@@ -96,9 +96,8 @@ hmat_i, hmat_n, trans_ops = edrixs.get_ops(*problem, backend=backend)
 eval_i, evec_i = edrixs.ed(
     hmat_i,
     num_evals=3,
-    backend=backend,
-    backend_kws={'eigval_tol': 1e-10, 'maxiter': 1000},
-)
+    backend=backend
+    )
 
 # Isotropic XAS with the geometry, temperature, and broadening of example 03.
 temperature = 300
