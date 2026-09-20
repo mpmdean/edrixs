@@ -158,6 +158,9 @@ def run(output_dir: Path) -> None:
     gamma_c = np.full(ominc_xas.shape, 0.48 / 2.0)
     poltype_xas = [("isotropic", 0.0)]
 
+    exchange = 6 * 0.027
+    ext_B = exchange / (2 * np.sqrt(6)) * np.array([1.0, 1.0, 2.0])
+
     problem = model_siam(
         parameters["shell_name"],
         parameters["nbath"],
@@ -172,7 +175,7 @@ def run(output_dir: Path) -> None:
         bath_level_n=parameters["bath_level_n"],
         hyb=parameters["hyb"],
         slater=parameters["slater"],
-        ext_B=np.array([0.0, 0.0, 0.12]),
+        ext_B=ext_B,
         on_which="spin",
         sparse_U=True,
     )
