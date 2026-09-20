@@ -278,6 +278,76 @@ def xas(eval_i, evec_i, hmat_n, trans_op, ominc, *,
     controls such as the SciPy Lanczos dimension belong in ``backend_kws``.
     When ``backend`` is omitted, it is inferred from ``hmat_n`` and the
     transition operators.
+
+    Parameters
+    ----------
+    eval_i : array-like of float, shape (nstate,)
+        Energies of the retained initial states, normally returned by
+        :func:`~edrixs.solvers.ed`.
+    evec_i : backend-owned eigenvector representation
+        Retained initial-state eigenvectors returned by
+        :func:`~edrixs.solvers.ed`.  For the ``'dense'`` and ``'scipy'``
+        backends this is a two-dimensional array whose column ``i`` belongs to
+        ``eval_i[i]``.
+    hmat_n : backend-owned operator
+        Intermediate-state Hamiltonian, normally returned by
+        :func:`~edrixs.solvers.get_ops`.
+    trans_op : sequence of backend-owned operators
+        Transition operators from the initial to the intermediate Hilbert
+        space.  There must be three components for a dipole transition or five
+        for a quadrupole transition.
+    ominc : array-like of float, shape (n_ominc,)
+        Incident photon-energy grid.
+    gamma_c : float or array-like of float, optional
+        Core-hole lifetime broadening.  An array must have the same shape as
+        ``ominc``.  Default is ``0.1``.
+    thin, phi : float, optional
+        Incident and azimuthal angles in radians.  Defaults are ``1.0`` and
+        ``0.0``, respectively.
+    pol_type : sequence of tuple or None, optional
+        Polarization channels.  Each entry is ``(kind, alpha)``, where
+        ``kind`` is ``'linear'``, ``'left'``, ``'right'``, or ``'isotropic'``
+        and ``alpha`` is the linear-polarization angle in radians.  The angle
+        is ignored for circular and isotropic polarization.  The default is
+        ``[('isotropic', 0.0)]``.
+    temperature : float, optional
+        Temperature in kelvin used for the Boltzmann weights of the retained
+        initial states.  Default is ``1.0``.
+    scatter_axis : array-like of float, shape (3, 3), or None, optional
+        Cartesian axes defining the scattering frame.  The identity matrix is
+        used by default.
+    backend : {'dense', 'scipy', 'fortran', 'petsc'} or None, optional
+        Numerical backend.  If omitted, infer it from ``hmat_n`` and
+        ``trans_op``.  The PETSc backend is currently an unimplemented stub.
+    backend_kws : mapping or None, optional
+        Backend-specific solver settings.  For example, the SciPy backend
+        accepts ``nkryl`` for the maximum Lanczos dimension.
+
+    Returns
+    -------
+    numpy.ndarray
+        XAS intensity with shape ``(len(ominc), len(pol_type))``.  When
+        ``pol_type`` is ``None``, the second dimension has length one.
+
+    See Also
+    --------
+    edrixs.solvers.ed
+        Compute the retained initial-state eigenpairs.
+    edrixs.solvers.rixs
+        Calculate a resonant inelastic X-ray scattering spectrum.
+
+    Examples
+    --------
+    After constructing the operators and retained eigenstates, calculate an
+    isotropic spectrum on an incident-energy grid:
+
+    >>> import numpy as np
+    >>> import edrixs
+    >>> ominc = np.linspace(-5.0, 5.0, 201)
+    >>> spectrum = edrixs.xas(  # doctest: +SKIP
+    ...     eval_i, evec_i, hmat_n, trans_ops, ominc,
+    ...     pol_type=[('isotropic', 0.0)], backend='scipy'
+    ... )
     """
     backend_name = (
         backend if backend is not None else _infer_backend(hmat_n, *trans_op)
@@ -324,6 +394,98 @@ def rixs(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     If ``skip_gs`` is true, transitions into the retained initial-state
     subspace are omitted from the final-state spectrum, matching the legacy
     ``skip_gs`` behavior.
+
+    Parameters
+    ----------
+    eval_i : array-like of float, shape (nstate,)
+        Energies of the retained initial states, normally returned by
+        :func:`~edrixs.solvers.ed`.
+    evec_i : backend-owned eigenvector representation
+        Retained initial-state eigenvectors returned by
+        :func:`~edrixs.solvers.ed`.  For the ``'dense'`` and ``'scipy'``
+        backends this is a two-dimensional array whose column ``i`` belongs to
+        ``eval_i[i]``.
+    hmat_i : backend-owned operator
+        Initial- and final-state Hamiltonian.
+    hmat_n : backend-owned operator
+        Intermediate-state Hamiltonian.  Both Hamiltonians are normally
+        returned by :func:`~edrixs.solvers.get_ops`.
+    trans_op : sequence of backend-owned operators
+        Transition operators from the initial/final Hilbert space to the
+        intermediate Hilbert space.  There must be three components for a
+        dipole transition or five for a quadrupole transition.
+    ominc : array-like of float, shape (n_ominc,)
+        Incident photon-energy grid.
+    eloss : array-like of float, shape (n_eloss,)
+        Energy-loss grid.
+    gamma_c : float or array-like of float, optional
+        Core-hole lifetime broadening.  An array must have the same shape as
+        ``ominc``.  Default is ``0.1``.
+    gamma_f : float or array-like of float, optional
+        Final-state broadening.  An array must have the same shape as
+        ``eloss``.  Default is ``0.01``.
+    thin, thout, phi : float, optional
+        Incident, scattered, and azimuthal angles in radians.  Defaults are
+        ``1.0``, ``1.0``, and ``0.0``, respectively.
+    pol_type : sequence of tuple or None, optional
+        Polarization channels.  Each entry is
+        ``(in_kind, alpha, out_kind, beta)``, where each kind is ``'linear'``,
+        ``'left'``, or ``'right'`` and ``alpha`` and ``beta`` are the linear
+        polarization angles in radians.  The angles are ignored for circular
+        polarization.  Isotropic RIXS polarization is not supported.  The
+        default is ``[('linear', 0.0, 'linear', 0.0)]``.
+    temperature : float, optional
+        Temperature in kelvin used for the Boltzmann weights of the retained
+        initial states.  Default is ``1.0``.
+    scatter_axis : array-like of float, shape (3, 3), or None, optional
+        Cartesian axes defining the scattering frame.  The identity matrix is
+        used by default.
+    skip_gs : bool, optional
+        If True, project the retained initial-state subspace out of the final
+        states.  This option is not supported by the Fortran backend.  Default
+        is False.
+    return_poles : bool, optional
+        If True, also return the continued-fraction pole data.  Default is
+        False.
+    backend : {'dense', 'scipy', 'fortran', 'petsc'} or None, optional
+        Numerical backend.  If omitted, infer it from the Hamiltonians and
+        ``trans_op``.  The PETSc backend is currently an unimplemented stub.
+    backend_kws : mapping or None, optional
+        Backend-specific solver settings.  For example, the SciPy backend
+        accepts ``nkryl``, ``linsys_tol``, ``linsys_maxiter``, and
+        ``linsys_restart``.
+
+    Returns
+    -------
+    spectrum : numpy.ndarray
+        RIXS intensity with shape
+        ``(len(ominc), len(eloss), len(pol_type))``.  When ``pol_type`` is
+        ``None``, the third dimension has length one.
+    poles : list of list of dict, optional
+        Continued-fraction poles indexed first by incident energy and then by
+        polarization.  Returned together with ``spectrum`` only when
+        ``return_poles`` is True.
+
+    See Also
+    --------
+    edrixs.solvers.ed
+        Compute the retained initial-state eigenpairs.
+    edrixs.solvers.xas
+        Calculate an X-ray absorption spectrum.
+
+    Examples
+    --------
+    After constructing the operators and retained eigenstates, calculate a
+    linear-polarization RIXS spectrum:
+
+    >>> import numpy as np
+    >>> import edrixs
+    >>> ominc = np.linspace(-1.0, 1.0, 11)
+    >>> eloss = np.linspace(0.0, 5.0, 501)
+    >>> spectrum = edrixs.rixs(  # doctest: +SKIP
+    ...     eval_i, evec_i, hmat_i, hmat_n, trans_ops, ominc, eloss,
+    ...     pol_type=[('linear', 0.0, 'linear', 0.0)], backend='scipy'
+    ... )
     """
     backend_name = (
         backend
