@@ -13,14 +13,27 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../../edrixs'))
+from importlib.metadata import PackageNotFoundError, version as distribution_version
+from pathlib import Path
 
+try:
+    import edrixs
+    import edrixs.fedrixs
+    edrixs_version = distribution_version("edrixs")
+except (ImportError, PackageNotFoundError) as exc:
+    raise RuntimeError(
+        "Building the EDRIXS documentation requires an installed EDRIXS "
+        "package with the native fedrixs extension."
+    ) from exc
+
+print(
+    "\n"
+    + "=" * 79
+    + f"\nBUILDING DOCS AGAINST INSTALLED EDRIXS {edrixs_version}\n"
+    + f"Package: {Path(edrixs.__file__).resolve()}\n"
+    + "=" * 79
+    + "\n"
+)
 
 # -- General configuration ------------------------------------------------
 
@@ -203,11 +216,10 @@ intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org', None),
 }
 
-from sphinx_gallery.sorting import FileNameSortKey
 # sphinx gallery folders
 sphinx_gallery_conf = {
      'examples_dirs': '../../examples/sphinx/',   # path to your example scripts
      'filename_pattern': '/example_',
      'gallery_dirs': 'auto_examples',  # path to save gallery generated output,
-     'within_subsection_order': FileNameSortKey,
+     'within_subsection_order': 'FileNameSortKey',
 }
