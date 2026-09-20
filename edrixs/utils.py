@@ -196,8 +196,8 @@ def UdJH_to_F0F2F4F6(Ud, JH):
 def ABC_to_F0F2F4(A, B, C):
     """
     Convert Racah parameters :math:`A`, :math:`B`, and :math:`C` to the
-    Slater integrals :math:`F^0`, :math:`F^2`, and :math:`F^4` for a
-    :math:`d` shell.
+    unnormalized (raw) Slater integrals :math:`F^0`, :math:`F^2`, and
+    :math:`F^4` for a :math:`d` shell.
 
     Parameters
     ----------
@@ -211,11 +211,18 @@ def ABC_to_F0F2F4(A, B, C):
     Returns
     -------
     F0: float
-        Slater integral :math:`F^0`.
+        Unnormalized Slater integral :math:`F^0`.
     F2: float
-        Slater integral :math:`F^2`.
+        Unnormalized Slater integral :math:`F^2`.
     F4: float
-        Slater integral :math:`F^4`.
+        Unnormalized Slater integral :math:`F^4`.
+
+    Notes
+    -----
+    Here :math:`F^k` denotes the unnormalized Slater integral used by EDRIXS.
+    It should not be confused with the alternative normalized convention
+    :math:`F_0 = F^0`, :math:`F_2 = F^2 / 49`, and
+    :math:`F_4 = F^4 / 441`.
     """
 
     F0 = A + 7.0 / 5.0 * C
@@ -227,18 +234,18 @@ def ABC_to_F0F2F4(A, B, C):
 
 def F0F2F4_to_ABC(F0, F2, F4):
     """
-    Convert the Slater integrals :math:`F^0`, :math:`F^2`, and :math:`F^4`
-    to Racah parameters :math:`A`, :math:`B`, and :math:`C` for a
-    :math:`d` shell.
+    Convert the unnormalized (raw) Slater integrals :math:`F^0`,
+    :math:`F^2`, and :math:`F^4` to Racah parameters :math:`A`, :math:`B`,
+    and :math:`C` for a :math:`d` shell.
 
     Parameters
     ----------
     F0: float
-        Slater integral :math:`F^0`.
+        Unnormalized Slater integral :math:`F^0`.
     F2: float
-        Slater integral :math:`F^2`.
+        Unnormalized Slater integral :math:`F^2`.
     F4: float
-        Slater integral :math:`F^4`.
+        Unnormalized Slater integral :math:`F^4`.
 
     Returns
     -------
@@ -248,6 +255,13 @@ def F0F2F4_to_ABC(F0, F2, F4):
         Racah parameter :math:`B`.
     C: float
         Racah parameter :math:`C`.
+
+    Notes
+    -----
+    Here :math:`F^k` denotes the unnormalized Slater integral used by EDRIXS.
+    It should not be confused with the alternative normalized convention
+    :math:`F_0 = F^0`, :math:`F_2 = F^2 / 49`, and
+    :math:`F_4 = F^4 / 441`.
     """
 
     A = F0 - 49.0 / 441.0 * F4
