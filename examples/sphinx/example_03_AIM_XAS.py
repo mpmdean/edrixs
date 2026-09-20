@@ -65,7 +65,7 @@ shell_name = ('d', 'p') # valence and core shells for XAS calculation
 # ------------------------------------------------------------------------------
 # The atomic Coulomb interactions are usually initialized based on Hartree-Fock
 # calculations from, for example,
-# `Cowan's code <https://www.tcd.ie/Physics/people/Cormac.McGuinness/Cowan/>`_.
+# `Cowan's code <https://www.tcd.ie/physics/research/groups/xray-spectroscopy/CowanCode.php>`_.
 # edrixs has a database of these.
 info  = edrixs.utils.get_atom_data('Ni', '3d', nd, edge='L3')
 
@@ -157,7 +157,7 @@ trans_c2n = edrixs.tmat_c2r('d',True)
 # spin-orbitals for each orbital energy. Python
 # `list comprehension <https://realpython.com/list-comprehension-python/>`_
 # and
-# `numpy indexing <https://numpy.org/doc/stable/reference/arrays.indexing.html>`_
+# `NumPy indexing <https://numpy.org/doc/stable/user/basics.indexing.html>`_
 # are used here. See :ref:`sphx_glr_auto_examples_example_01_crystal_field.py`
 # for more details if needed.
 ten_dq = 0.56
