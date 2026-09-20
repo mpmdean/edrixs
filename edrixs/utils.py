@@ -1,5 +1,6 @@
 __all__ = ['beta_to_kelvin', 'kelvin_to_beta', 'boltz_dist', 'UJ_to_UdJH',
-           'UdJH_to_UJ', 'UdJH_to_F0F2F4', 'UdJH_to_F0F2F4F6', 'F0F2F4_to_UdJH',
+           'UdJH_to_UJ', 'UdJH_to_F0F2F4', 'UdJH_to_F0F2F4F6',
+           'ABC_to_F0F2F4', 'F0F2F4_to_ABC', 'F0F2F4_to_UdJH',
            'F0F2F4_to_UJ', 'F0F2F4F6_to_UdJH', 'CT_imp_bath',
            'CT_imp_bath_core_hole', 'info_atomic_shell',
            'case_to_shell_name', 'edge_to_shell_name', 'slater_integrals_name',
@@ -190,6 +191,70 @@ def UdJH_to_F0F2F4F6(Ud, JH):
     F6 = 1001 / 2025.0 * F2
 
     return F0, F2, F4, F6
+
+
+def ABC_to_F0F2F4(A, B, C):
+    """
+    Convert Racah parameters :math:`A`, :math:`B`, and :math:`C` to the
+    Slater integrals :math:`F^0`, :math:`F^2`, and :math:`F^4` for a
+    :math:`d` shell.
+
+    Parameters
+    ----------
+    A: float
+        Racah parameter :math:`A`.
+    B: float
+        Racah parameter :math:`B`.
+    C: float
+        Racah parameter :math:`C`.
+
+    Returns
+    -------
+    F0: float
+        Slater integral :math:`F^0`.
+    F2: float
+        Slater integral :math:`F^2`.
+    F4: float
+        Slater integral :math:`F^4`.
+    """
+
+    F0 = A + 7.0 / 5.0 * C
+    F2 = 49.0 * B + 7.0 * C
+    F4 = 63.0 / 5.0 * C
+
+    return F0, F2, F4
+
+
+def F0F2F4_to_ABC(F0, F2, F4):
+    """
+    Convert the Slater integrals :math:`F^0`, :math:`F^2`, and :math:`F^4`
+    to Racah parameters :math:`A`, :math:`B`, and :math:`C` for a
+    :math:`d` shell.
+
+    Parameters
+    ----------
+    F0: float
+        Slater integral :math:`F^0`.
+    F2: float
+        Slater integral :math:`F^2`.
+    F4: float
+        Slater integral :math:`F^4`.
+
+    Returns
+    -------
+    A: float
+        Racah parameter :math:`A`.
+    B: float
+        Racah parameter :math:`B`.
+    C: float
+        Racah parameter :math:`C`.
+    """
+
+    A = F0 - 49.0 / 441.0 * F4
+    B = 1.0 / 49.0 * F2 - 5.0 / 441.0 * F4
+    C = 35.0 / 441.0 * F4
+
+    return A, B, C
 
 
 def F0F2F4_to_UdJH(F0, F2, F4):
