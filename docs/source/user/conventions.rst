@@ -23,11 +23,13 @@ Energies and naming
   ``umat_n``, ``basis_n`` and ``hmat_n`` the problem with a core hole.
 * **Coulomb interactions.** The four-body interactions are parameterized using
   Slater integrals. EDRIXS ships Hartree-Fock values for these integrals in
-  :func:`~edrixs.utils.get_atom_data` and provides conversions between from
-  other common parameterizations such as the Racah parameters in
-  :func:`~edrixs.utils`. The magnitude of the Hartree-Fock values are
-  usually **scaled down** to 70-90% of their  to approximate
-  screening in the solid.
+  :func:`~edrixs.utils.get_atom_data` and provides conversions between Slater
+  integrals and the common :math:`U`, :math:`J`, :math:`U_d`, and :math:`J_H`
+  parameterizations through functions such as
+  :func:`~edrixs.utils.UdJH_to_F0F2F4` and
+  :func:`~edrixs.utils.F0F2F4_to_UdJH`. The Hartree-Fock values are usually
+  **scaled down** to 70-90% of their atomic values to approximate screening in
+  the solid.
 * **Core-level energies.** The absolute energy of a core level is not defined
   by the calculation.  The resonance position is set by hand through
   ``shell_level`` (or ``c_level``) together with an offset chosen to match
@@ -48,7 +50,7 @@ Unless specified otherwise, EDRIXS uses these orderings.
   - ``f``:  :math:`f_{z^3}, f_{xz^2}, f_{yz^2}, f_{z(x^2-y^2)}, f_{xyz},
     f_{x(x^2-3y^2)}, f_{y(3x^2-y^2)}`
 
-* :math:`\lvert j^2, j_z \rangle` **basis** (SOC diagonal): the
+* :math:`\lvert j, j_z \rangle` **basis** (SOC diagonal): the
   :math:`j = l-1/2` block first, then the :math:`j = l+1/2` block, each ordered
   :math:`-j, -j+1, ..., j`.
 
@@ -56,7 +58,7 @@ The **default single-particle basis used to define the Fock basis** is:
 
 * complex spherical harmonics for ``p``, ``d``, ``t2g`` and ``f`` (``p`` and
   ``t2g`` share the same complex-harmonic basis);
-* the :math:`\lvert j^2, j_z \rangle` basis for ``p12``, ``p32``, ``d32``,
+* the :math:`\lvert j, j_z \rangle` basis for ``p12``, ``p32``, ``d32``,
   ``d52``, ``f52`` and ``f72``.
 
 Helper functions that return matrices or tensors -- ``get_umat_slater``,
