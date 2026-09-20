@@ -72,4 +72,4 @@ Using Docker is a nice way to straightforwardly share your code with others. The
     FROM edrixs/edrixs
 
 You might like to checkout the `jupyter-repo2docker
-<https://repo2docker.readthedocs.io/en/latest/>`_ project, which helps automate the process of building and connecting to docker images. The `mybinder <https://mybinder.org/>`_ project might also be helpful as this will open a github respository of notebooks in an executable environment, making your code immediately reproducible by anyone, anywhere.
+<https://repo2docker.readthedocs.io/en/latest/>`_ project, which helps automate the process of building and connecting to docker images. The `mybinder <https://mybinder.org/>`_ project might also be helpful as this will open a github repository of notebooks in an executable environment, making your code immediately reproducible by anyone, anywhere.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""
+r"""
 RIXS calculations for an atomic model
 =====================================
 Here we show how to compute RIXS for a single site atomic model with crystal

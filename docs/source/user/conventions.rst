@@ -23,11 +23,13 @@ Energies and naming
   ``umat_n``, ``basis_n`` and ``hmat_n`` the problem with a core hole.
 * **Coulomb interactions.** The four-body interactions are parameterized using
   Slater integrals. EDRIXS ships Hartree-Fock values for these integrals in
-  :func:`~edrixs.utils.get_atom_data` and provides conversions between from
-  other common parameterizations such as the Racah parameters in
-  :func:`~edrixs.utils`. The magnitude of the Hartree-Fock values are
-  usually **scaled down** to 70-90% of their  to approximate
-  screening in the solid.
+  :func:`~edrixs.utils.get_atom_data` and provides conversions between Slater
+  integrals and the common :math:`U`, :math:`J`, :math:`U_d`, and :math:`J_H`
+  parameterizations through functions such as
+  :func:`~edrixs.utils.UdJH_to_F0F2F4` and
+  :func:`~edrixs.utils.F0F2F4_to_UdJH`. The Hartree-Fock values are usually
+  **scaled down** to 70-90% of their atomic values to approximate screening in
+  the solid.
 * **Core-level energies.** The absolute energy of a core level is not defined
   by the calculation.  The resonance position is set by hand through
   ``shell_level`` (or ``c_level``) together with an offset chosen to match
@@ -48,7 +50,7 @@ Unless specified otherwise, EDRIXS uses these orderings.
   - ``f``:  :math:`f_{z^3}, f_{xz^2}, f_{yz^2}, f_{z(x^2-y^2)}, f_{xyz},
     f_{x(x^2-3y^2)}, f_{y(3x^2-y^2)}`
 
-* :math:`\lvert j^2, j_z \rangle` **basis** (SOC diagonal): the
+* :math:`\lvert j, j_z \rangle` **basis** (SOC diagonal): the
   :math:`j = l-1/2` block first, then the :math:`j = l+1/2` block, each ordered
   :math:`-j, -j+1, ..., j`.
 
@@ -56,7 +58,7 @@ The **default single-particle basis used to define the Fock basis** is:
 
 * complex spherical harmonics for ``p``, ``d``, ``t2g`` and ``f`` (``p`` and
   ``t2g`` share the same complex-harmonic basis);
-* the :math:`\lvert j^2, j_z \rangle` basis for ``p12``, ``p32``, ``d32``,
+* the :math:`\lvert j, j_z \rangle` basis for ``p12``, ``p32``, ``d32``,
   ``d52``, ``f52`` and ``f72``.
 
 Helper functions that return matrices or tensors -- ``get_umat_slater``,
@@ -67,8 +69,9 @@ so on -- return them **in this default basis**.
 
    You may express :code:`emat` and :code:`umat` in any single-particle basis,
    but everything entering the Hamiltonian must be expressed in that
-   *same* basis.  Transform one-body matrices with :func:`~edrixs.cb_op` and
-   Coulomb tensors with :func:`~edrixs.transform_utensor`.  The recommended
+   *same* basis.  Transform one-body matrices with
+   :func:`~edrixs.basis_transform.cb_op` and Coulomb tensors with
+   :func:`~edrixs.basis_transform.transform_utensor`.  The recommended
    practice is to keep the default basis and only transform the extra matrices
    you supply (for example a crystal-field matrix) into it.  ``cb_op`` applies
 
@@ -106,14 +109,16 @@ Spectral conventions
   :math:`x, y, z` axes coincide with the lab frame; use ``loc_axis`` (model) or
   ``scatter_axis`` (solver) to change this.
 * **Polarization** is given as a list of channels.  For XAS each entry is
-  ``(kind, angle)`` with ``kind`` one of ``'linear'``, ``'circular'`` or
-  ``'isotropic'`` (the last for powders).  For RIXS each entry is a 4-tuple
+  ``(kind, angle)`` with ``kind`` one of ``'linear'``, ``'left'``, ``'right'``
+  or ``'isotropic'`` (the last for powders).  For RIXS each entry is a 4-tuple
   ``(in_kind, in_angle, out_kind, out_angle)``; sum the two outgoing channels
   when the experiment does not resolve emitted polarization.
 * **Broadening** is a Lorentzian half width at half maximum.  ``gamma_c`` is the
   inverse core-hole lifetime (it dominates XAS and the incident-energy axis of
   RIXS); ``gamma_f`` is the final-state / resolution width on the RIXS
-  energy-loss axis.  Either may be a scalar or an array over incident energy.
+  energy-loss axis.  ``gamma_c`` may be a scalar or an array with the same
+  shape as ``ominc``; ``gamma_f`` may be a scalar or an array with the same
+  shape as ``eloss``.
 * **Temperature** (in K) sets Boltzmann weights over the retained low-energy
   initial states, so ``num_evals`` in ``ed`` must be large enough to cover all
   thermally populated states.

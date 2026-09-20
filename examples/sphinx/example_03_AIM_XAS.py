@@ -65,7 +65,7 @@ shell_name = ('d', 'p') # valence and core shells for XAS calculation
 # ------------------------------------------------------------------------------
 # The atomic Coulomb interactions are usually initialized based on Hartree-Fock
 # calculations from, for example,
-# `Cowan's code <https://www.tcd.ie/Physics/people/Cormac.McGuinness/Cowan/>`_.
+# `Cowan's code <https://www.tcd.ie/physics/research/groups/xray-spectroscopy/CowanCode.php>`_.
 # edrixs has a database of these.
 info  = edrixs.utils.get_atom_data('Ni', '3d', nd, edge='L3')
 
@@ -157,7 +157,7 @@ trans_c2n = edrixs.tmat_c2r('d',True)
 # spin-orbitals for each orbital energy. Python
 # `list comprehension <https://realpython.com/list-comprehension-python/>`_
 # and
-# `numpy indexing <https://numpy.org/doc/stable/reference/arrays.indexing.html>`_
+# `NumPy indexing <https://numpy.org/doc/stable/user/basics.indexing.html>`_
 # are used here. See :ref:`sphx_glr_auto_examples_example_01_crystal_field.py`
 # for more details if needed.
 ten_dq = 0.56
@@ -265,9 +265,10 @@ gamma_c = np.full(ominc_xas.shape, 0.48/2)
 # instead applies it to spin only, which is a convenient way to impose a
 # magnetic order direction on the sample. The Bohr magneton
 # :math:`\mu_B = 5.7883818012\times 10^{-5}` eV/T is useful for converting
-# a physical field strength. Here we mimic magnetic order by applying a small
-# spin field along :math:`z`.
-ext_B = np.array([0.00, 0.00, 0.12])
+# a physical field strength. Here we mimic magnetic order with an exchange
+# energy of :math:`6 \times 0.027` eV directed along :math:`[112]`.
+exchange = 6 * 0.027
+ext_B = exchange / (2 * np.sqrt(6)) * np.array([1.0, 1.0, 2.0])
 on_which = 'spin'
 
 ################################################################################

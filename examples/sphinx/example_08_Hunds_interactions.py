@@ -169,7 +169,7 @@ plt.show()
 
 
 ################################################################################
-# Connecton between atomic and charge transfer limits
+# Connection between atomic and charge transfer limits
 # ------------------------------------------------------------------------------
 # We now examine the quantum numbers during cross over between the two limits
 # with :math:`e_L`. Let's first look at the how :math:`<S^2>` changes for the
