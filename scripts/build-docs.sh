@@ -2,4 +2,4 @@
 
 set -vxeuo pipefail
 
-make -C docs/ html
+sphinx-build -E -n -W --keep-going -b html docs/source docs/build/html

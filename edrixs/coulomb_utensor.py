@@ -176,9 +176,9 @@ def umat_slater(l_list, fk):
 
     See also
     --------
-    coulomb_utensor.get_umat_slater
-    coulomb_utensor.get_umat_kanamori
-    coulomb_utensor.get_umat_kanamori_ge
+    edrixs.coulomb_utensor.get_umat_slater
+    edrixs.coulomb_utensor.get_umat_kanamori
+    edrixs.coulomb_utensor.get_umat_kanamori_ge
     """
     k_list = list(range(0, 2 * max(l_list) + 1))
     ck = {}
@@ -260,9 +260,9 @@ def get_umat_kanamori_ge(norbs, U1, U2, J, Jx, Jp):
 
     See Also
     --------
-    coulomb_utensor.get_umat_kanamori
-    coulomb_utensor.get_umat_slater
-    coulomb_utensor.umat_slater
+    edrixs.coulomb_utensor.get_umat_kanamori
+    edrixs.coulomb_utensor.get_umat_slater
+    edrixs.coulomb_utensor.umat_slater
 
     """
 
@@ -528,9 +528,9 @@ def get_umat_slater(case, *args):
 
     See Also
     --------
-    coulomb_utensor.umat_slater
-    coulomb_utensor.get_umat_kanamori
-    coulomb_utensor.get_umat_kanamori_ge
+    edrixs.coulomb_utensor.umat_slater
+    edrixs.coulomb_utensor.get_umat_kanamori
+    edrixs.coulomb_utensor.get_umat_kanamori_ge
 
     """
     info = info_atomic_shell()
@@ -754,9 +754,9 @@ def get_umat_kanamori(norbs, U, J):
 
     See Also
     --------
-    coulomb_utensor.get_umat_kanamori_ge
-    coulomb_utensor.get_umat_slater
-    coulomb_utensor.umat_slater
+    edrixs.coulomb_utensor.get_umat_kanamori_ge
+    edrixs.coulomb_utensor.get_umat_slater
+    edrixs.coulomb_utensor.umat_slater
 
     """
 

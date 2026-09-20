@@ -21,7 +21,8 @@ def get_spectra_from_poles(poles_dict, omega_mesh, gamma_mesh, temperature):
     poles_dict: dict
         Dict containing information of poles, which are calculated from
         xas_fsolver and rixs_fsolver.
-        This dict is constructed by :func:`iostream.read_poles_from_file`.
+        This dict is constructed by
+        :func:`~edrixs.iostream.read_poles_from_file`.
     omega_mesh: 1d float array
         Energy grid.
     gamma_mesh: 1d float array
@@ -36,7 +37,8 @@ def get_spectra_from_poles(poles_dict, omega_mesh, gamma_mesh, temperature):
 
     See also
     --------
-    iostream.read_poles_from_file: read XAS or RIXS poles files.
+    edrixs.iostream.read_poles_from_file
+        Read XAS or RIXS poles files.
     """
     nom = len(omega_mesh)
     spectra = np.zeros(nom, dtype=np.float64)
