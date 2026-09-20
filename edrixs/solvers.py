@@ -545,7 +545,7 @@ def ed_1v1c_py(shell_name, *, shell_level=None, v_soc=None, c_soc=0,
     shell with pure Python solver.
     For example, for Ni-:math:`L_3` edge RIXS, they are 3d valence and 2p core shells.
 
-    It will use scipy.linalag.eigh to exactly diagonalize both the initial and intermediate
+    It will use scipy.linalg.eigh to exactly diagonalize both the initial and intermediate
     Hamiltonians to get all the eigenvalues and eigenvectors, and the transition operators
     will be built in the many-body eigenvector basis.
 
@@ -618,7 +618,7 @@ def ed_1v1c_py(shell_name, *, shell_level=None, v_soc=None, c_soc=0,
 
         It will be an identity matrix if not provided.
     verbose: int
-        Level of writting data to files. Hopping matrices, Coulomb tensors, eigvenvalues
+        Level of writing data to files. Hopping matrices, Coulomb tensors, eigenvalues
         will be written if verbose > 0.
 
     Returns
@@ -1171,8 +1171,8 @@ def ed_1v1c_fort(comm, shell_name, *, shell_level=None,
 
         They will be zeros if not provided.
     do_ed: logical
-        If do_end=True, diagonalize the Hamitlonian to find a few lowest eigenstates, return the
-        eigenvalues and density matirx, and write the eigenvectors in files eigvec.n, otherwise,
+        If do_ed=True, diagonalize the Hamiltonian to find a few lowest eigenstates, return the
+        eigenvalues and density matrix, and write the eigenvectors in files eigvec.n, otherwise,
         just write out the input files, do not perform the ED.
     ed_solver: int
         Type of ED solver, options can be 0, 1, 2
@@ -1183,7 +1183,7 @@ def ed_1v1c_fort(comm, shell_name, *, shell_level=None,
           no re-orthogonalization has been applied, so it is not very accurate.
 
         - 2: use parallel version of Arpack library to find a few lowest eigenvalues,
-          it is accurate and is the recommeded choice in real calculations of XAS and RIXS.
+          it is accurate and is the recommended choice in real calculations of XAS and RIXS.
     neval: int
         Number of eigenvalues to be found. For ed_solver=2, the value should not be too small,
         neval > 10 is usually a safe value.
@@ -1580,8 +1580,8 @@ def ed_2v1c_fort(comm, shell_name, *, shell_level=None,
 
         They will be zeros if not provided.
     do_ed: logical
-        If do_end=True, diagonalize the Hamitlonian to find a few lowest eigenstates, return the
-        eigenvalues and density matirx, and write the eigenvectors in files eigvec.n, otherwise,
+        If do_ed=True, diagonalize the Hamiltonian to find a few lowest eigenstates, return the
+        eigenvalues and density matrix, and write the eigenvectors in files eigvec.n, otherwise,
         just write out the input files, do not perform the ED.
     ed_solver: int
         Type of ED solver, options can be 0, 1, 2
@@ -1592,7 +1592,7 @@ def ed_2v1c_fort(comm, shell_name, *, shell_level=None,
           no re-orthogonalization has been applied, so it is not very accurate.
 
         - 2: use parallel version of Arpack library to find a few lowest eigenvalues,
-          it is accurate and is the recommeded choice in real calculations of XAS and RIXS.
+          it is accurate and is the recommended choice in real calculations of XAS and RIXS.
     neval: int
         Number of eigenvalues to be found. For ed_solver=2, the value should not be too small,
         neval > 10 is usually a safe value.
@@ -1984,7 +1984,7 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
         - 0: First, search the ground state in different subspaces of total occupancy
           :math:`N` with ed_solver=1, and then do a more accurate ED in the subspace
           :math:`N` where the ground state lies to find a few lowest eigenstates, return
-          the eigenvalues and density matirx, and write the eigenvectors in files eigvec.n
+          the eigenvalues and density matrix, and write the eigenvectors in files eigvec.n
 
         - 1: Only do ED for given occupancy number *v_noccu*, return eigenvalues and
           density matrix, write eigenvectors to files eigvec.n
@@ -2000,7 +2000,7 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
           no re-orthogonalization has been applied, so it is not very accurate.
 
         - 2: use parallel version of Arpack library to find a few lowest eigenvalues,
-          it is accurate and is the recommeded choice in real calculations of XAS and RIXS.
+          it is accurate and is the recommended choice in real calculations of XAS and RIXS.
     neval: int
         Number of eigenvalues to be found. For ed_solver=2, the value should not be too small,
         neval > 10 is usually a safe value.
