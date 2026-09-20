@@ -5,7 +5,7 @@ Credits
 Maintainer
 ----------
 
-* Brookhaven National Lab <dama@bnl.gov>
+* Mark Dean, Brookhaven National Laboratory <mdean@bnl.gov>
 
 Contributors
 ------------
