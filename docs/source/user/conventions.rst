@@ -67,8 +67,9 @@ so on -- return them **in this default basis**.
 
    You may express :code:`emat` and :code:`umat` in any single-particle basis,
    but everything entering the Hamiltonian must be expressed in that
-   *same* basis.  Transform one-body matrices with :func:`~edrixs.cb_op` and
-   Coulomb tensors with :func:`~edrixs.transform_utensor`.  The recommended
+   *same* basis.  Transform one-body matrices with
+   :func:`~edrixs.basis_transform.cb_op` and Coulomb tensors with
+   :func:`~edrixs.basis_transform.transform_utensor`.  The recommended
    practice is to keep the default basis and only transform the extra matrices
    you supply (for example a crystal-field matrix) into it.  ``cb_op`` applies
 
