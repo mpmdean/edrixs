@@ -142,8 +142,9 @@ The third stage finds the low-energy eigenstates of the many-body Hamiltonian.
 
 * ``eval_i`` is a 1D real array ordered by increasing energy.
 * For the ``dense`` and ``scipy`` backends ``evec_i`` is a 2D complex array; the
-  eigenvector belonging to ``eval_i[k]`` is the column ``evec_i[:, k]``.  For
-  the ``petsc`` backend ``evec_i`` is a list of distributed PETSc vectors.
+  eigenvector belonging to ``eval_i[k]`` is the column ``evec_i[:, k]``.
+* The ``petsc`` backend is currently an interface stub.  Requesting it raises
+  ``NotImplementedError`` rather than returning eigenvectors.
 
 .. _xas:
 
