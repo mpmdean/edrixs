@@ -89,7 +89,9 @@ def build_op(emat, umat, lb, rb=None, *, backend='scipy',
     use_numba : bool, optional
         JIT-compile matrix-entry construction. The default is False.
     backend_kws : mapping, optional
-        Backend-specific construction options. See :ref:`backend-options`.
+        Backend-specific construction options. Accepted names, defaults, and
+        constraints are in the EDRIXS backend keyword reference:
+        https://edrixs.github.io/edrixs/dev/user/backend.html#backend-options
 
     Returns
     -------
@@ -152,8 +154,9 @@ def get_ops(
     use_numba : bool, optional
         JIT-compile matrix-entry construction. The default is False.
     backend_kws : mapping, optional
-        Backend-specific operator-construction options. See
-        :ref:`backend-options`.
+        Backend-specific operator-construction options. Accepted names,
+        defaults, and constraints are in the EDRIXS backend keyword reference:
+        https://edrixs.github.io/edrixs/dev/user/backend.html#backend-options
 
     Returns
     -------
@@ -236,7 +239,9 @@ def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
     backend : str or None, optional
         Backend name. When omitted, infer it from ``hmat_i``.
     backend_kws : mapping, optional
-        Backend-specific eigensolver options. See :ref:`backend-options`.
+        Backend-specific eigensolver options. Accepted names, defaults, and
+        constraints are in the EDRIXS backend keyword reference:
+        https://edrixs.github.io/edrixs/dev/user/backend.html#backend-options
 
     Returns
     -------
@@ -319,7 +324,9 @@ def xas(eval_i, evec_i, hmat_n, trans_op, ominc, *,
         Numerical backend.  If omitted, infer it from ``hmat_n`` and
         ``trans_op``.  The PETSc backend is currently an unimplemented stub.
     backend_kws : mapping or None, optional
-        Backend-specific solver settings. See :ref:`backend-options`.
+        Backend-specific solver settings. Accepted names, defaults, and
+        constraints are in the EDRIXS backend keyword reference:
+        https://edrixs.github.io/edrixs/dev/user/backend.html#backend-options
 
     Returns
     -------
@@ -449,7 +456,9 @@ def rixs(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         Numerical backend.  If omitted, infer it from the Hamiltonians and
         ``trans_op``.  The PETSc backend is currently an unimplemented stub.
     backend_kws : mapping or None, optional
-        Backend-specific solver settings. See :ref:`backend-options`.
+        Backend-specific solver settings. Accepted names, defaults, and
+        constraints are in the EDRIXS backend keyword reference:
+        https://edrixs.github.io/edrixs/dev/user/backend.html#backend-options
 
     Returns
     -------
