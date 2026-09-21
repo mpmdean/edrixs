@@ -76,8 +76,8 @@ print(f"Energy to lowest energy ligand state is {E_to_ligand:.3f} eV")
 # lack of hybridization and separately diagonalize the impurity and bath
 # states. With the staged interface, each block Hamiltonian is built from the
 # relevant sub-blocks of :code:`emat_i` and :code:`umat_i` together with a
-# :class:`~edrixs.FockBasisSpec` fixing that block's occupancy. The blocks are
-# small, so we use the dense backend.
+# :class:`~edrixs.fock_basis.FockBasisSpec` fixing that block's occupancy. The
+# blocks are small, so we use the dense backend.
 
 d_block = slice(0, norb_d)
 L_block = slice(norb_d, 2 * norb_d)

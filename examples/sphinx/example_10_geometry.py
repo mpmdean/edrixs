@@ -45,10 +45,11 @@ def make_rixs(v_cfmat, thin, thout, loc_axis=None, scatter_axis=None):
     off = 871  # core-level offset, tuned so the resonance sits near the Ni L3 edge
     backend = 'scipy'
 
-    # :func:`~edrixs.model_1v1c` builds the backend-independent problem
+    # :func:`~edrixs.models.model_1v1c` builds the backend-independent problem
     # (one-body matrices, Coulomb tensors, Fock-basis specs and dipole
-    # matrices), :func:`~edrixs.get_ops` turns them into many-body operators,
-    # and :func:`~edrixs.ed` returns the low-energy initial states. The Ni
+    # matrices), :func:`~edrixs.solvers.get_ops` turns them into many-body
+    # operators, and :func:`~edrixs.solvers.ed` returns the low-energy initial
+    # states. The Ni
     # :math:`d^8` ground state is a spin triplet, so we keep three states.
     with contextlib.redirect_stdout(io.StringIO()):
         out = edrixs.model_1v1c(
