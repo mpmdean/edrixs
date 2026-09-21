@@ -6,8 +6,28 @@ Fortran keywords
 
 :doc:`Back to the backend overview <../backend>`
 
-All staged Fortran operations are collective on ``comm``.  When it is omitted,
-``mpi4py.MPI.COMM_WORLD`` is used.
+About this backend
+==================
+
+This backend runs the native, MPI-parallel Fortran solvers described in the
+`EDRIXS paper <https://arxiv.org/abs/1812.05735>`__.  It uses a staged,
+file-backed workflow: Python writes the solver inputs, calls the native
+executable, and reads the results.  The
+`EDRIXS repository <https://github.com/EDRIXS/edrixs>`__ contains the Fortran
+sources and build instructions.
+
+All staged operations are collective on an
+`mpi4py communicator <https://mpi4py.github.io/mpi4py/stable/html/reference/mpi4py.MPI.Comm.html>`__.
+When ``comm`` is omitted, ``mpi4py.MPI.COMM_WORLD`` is used.  Every rank in
+that communicator must enter the operation; see the
+`mpi4py collective communication tutorial <https://mpi4py.github.io/mpi4py/stable/html/tutorial.html#collective-communication>`__
+for the underlying MPI model.
+
+For exact diagonalization, ``ed_solver=0`` selects dense LAPACK,
+``ed_solver=1`` selects Lanczos, and ``ed_solver=2`` selects parallel
+ARPACK/PARPACK.  The `ARPACK project documentation
+<https://www.arpack.org/installation>`__ describes the serial and MPI-enabled
+libraries used by the last mode.
 
 These options belong only to the staged interface.  The legacy ``*_fort``
 functions retain their existing explicit parameters and behavior.
