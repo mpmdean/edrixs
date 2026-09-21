@@ -275,10 +275,11 @@ on_which = 'spin'
 # Build the model
 # ------------------------------------------------------------------------------
 # The staged EDRIXS interface separates the physical model from its numerical
-# representation. :func:`~edrixs.model_siam` collects the one-body matrices,
-# Coulomb parameters and Fock-basis specifications for the impurity plus bath
-# problem. With :code:`siam_type=0` the model is assembled from :code:`imp_mat`,
-# :code:`bath_level` and :code:`hyb` (and their core-hole counterparts). The
+# representation. :func:`~edrixs.models.model_siam` collects the one-body
+# matrices, Coulomb parameters and Fock-basis specifications for the impurity
+# plus bath problem. With :code:`siam_type=0` the model is assembled from
+# :code:`imp_mat`, :code:`bath_level` and :code:`hyb` (and their core-hole
+# counterparts). The
 # external magnetic field is applied via :code:`ext_B` acting
 # :code:`on_which='spin'`. The returned :code:`i` quantities describe the
 # initial and final states without a core hole, while the :code:`n` quantities
@@ -296,7 +297,7 @@ emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
 ################################################################################
 # Diagonalization
 # ------------------------------------------------------------------------------
-# :func:`~edrixs.get_ops` converts these backend-independent ingredients into
+# :func:`~edrixs.solvers.get_ops` converts these backend-independent ingredients into
 # many-body initial/final and intermediate Hamiltonians, plus the dipole
 # operators that map the initial Fock space to the intermediate one. Here we
 # select the PETSc backend, which stores the Hamiltonians as distributed
@@ -314,7 +315,7 @@ hmat_i, hmat_n, trans_ops = edrixs.get_ops(
 )
 
 ################################################################################
-# :func:`~edrixs.ed` obtains the retained low-energy eigenpairs of the
+# :func:`~edrixs.solvers.ed` obtains the retained low-energy eigenpairs of the
 # Hamiltonian without a core hole. Here :code:`num_evals=3` states are
 # thermally populated at the temperature of interest.
 eval_i, evec_i = edrixs.ed(hmat_i, num_evals=3, backend=backend)

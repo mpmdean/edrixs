@@ -95,12 +95,14 @@ ten_dq, d1, d3 = 2.5, 0.9, .2
 ################################################################################
 # Since this is a purely atomic calculation with no core shell, we assemble the
 # single-particle ingredients directly rather than going through
-# :func:`~edrixs.model_1v1c`. :class:`~edrixs.FockBasisSpec` describes the
+# :func:`~edrixs.models.model_1v1c`.
+# :class:`~edrixs.fock_basis.FockBasisSpec` describes the
 # :math:`d^8` Fock space (8 electrons in 10 spin-orbitals),
-# :func:`~edrixs.cf_tetragonal_d` builds the one-body crystal-field matrix and
-# :func:`~edrixs.get_umat_slater` the Coulomb tensor, both in the default
-# complex-harmonic basis. :func:`~edrixs.build_op` then constructs the many-body
-# Hamiltonian and :func:`~edrixs.ed` diagonalizes it. We put this procedure into
+# :func:`~edrixs.angular_momentum.cf_tetragonal_d` builds the one-body
+# crystal-field matrix and :func:`~edrixs.coulomb_utensor.get_umat_slater` the
+# Coulomb tensor, both in the default complex-harmonic basis.
+# :func:`~edrixs.solvers.build_op` then constructs the many-body Hamiltonian and
+# :func:`~edrixs.solvers.ed` diagonalizes it. We put this procedure into
 # a function, with the option to scale the Coulomb interactions.
 
 

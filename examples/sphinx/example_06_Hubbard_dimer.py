@@ -64,10 +64,10 @@ basis = edrixs.get_fock_basis_int(norb, noccu)
 # From here let us generate a function to build and diagonalize the Hamiltonian.
 # We need to generate the Coulomb matrix for the on-site interactions and
 # apply it to the block diagonal. The hopping connects off-site indices with
-# the same spin. :func:`~edrixs.build_op` transforms the one-body matrix
+# the same spin. :func:`~edrixs.solvers.build_op` transforms the one-body matrix
 # :code:`emat` and the two-body tensor :code:`umat` into the many-body
-# Hamiltonian in our Fock basis and :func:`~edrixs.ed` diagonalizes it. This
-# problem is tiny, so we use the :code:`'dense'` backend.
+# Hamiltonian in our Fock basis and :func:`~edrixs.solvers.ed` diagonalizes it.
+# This problem is tiny, so we use the :code:`'dense'` backend.
 def diagonalize(U, t, extra_emat=None):
     """Diagonalize 2 site Hubbard Hamiltonian"""
     umat = np.zeros((norb, norb, norb, norb), dtype=np.complex128)
