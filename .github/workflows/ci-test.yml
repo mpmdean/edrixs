@@ -4,6 +4,22 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build documentation from
+        required: true
+        default: master
+        type: string
+      docs_version:
+        description: Published documentation version (for example, 0.1.3)
+        required: true
+        default: dev
+        type: string
+      make_stable:
+        description: Also publish this build as stable
+        required: true
+        default: false
+        type: boolean
   release:
     types: [published]
 
@@ -16,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       - uses: pre-commit/action@v3.0.1
 
@@ -57,8 +75,12 @@ jobs:
     steps:
       - name: Checkout the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Set env vars
+        env:
+          MANUAL_DOCS_VERSION: ${{ inputs.docs_version }}
         run: |
           export REPOSITORY_NAME=${GITHUB_REPOSITORY#*/}  # just the repo, as opposed to org/repo
           echo "REPOSITORY_NAME=${REPOSITORY_NAME}" >> $GITHUB_ENV
@@ -66,6 +88,15 @@ jobs:
           python_version="${{ matrix.python-version }}"
           export PYTHON_VERSION_NODOT="${python_version//\./}"
           echo "PYTHON_VERSION_NODOT=${PYTHON_VERSION_NODOT}" >> $GITHUB_ENV
+
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            docs_version="${GITHUB_REF_NAME#v}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            docs_version="${MANUAL_DOCS_VERSION}"
+          else
+            docs_version="dev"
+          fi
+          echo "EDRIXS_DOCS_VERSION=${docs_version}" >> $GITHUB_ENV
 
       - name: Set MacOS Deployment Target
         if: runner.os == 'macOS'
@@ -134,11 +165,214 @@ jobs:
           name: ${{ env.REPOSITORY_NAME }}-${{ matrix.python-version }}-${{ matrix.host-os }}-docs
           path: docs/build/html/
 
+      - name: Test versioned documentation assembly
+        if: >-
+          matrix.host-os == 'ubuntu-latest' &&
+          matrix.python-version == '3.12' &&
+          github.event_name != 'workflow_dispatch'
+        run: |
+          mkdir -p docs/build/empty-site
+          bash scripts/prepare-versioned-docs.sh \
+            docs/build/html \
+            docs/build/empty-site \
+            docs/build/versioned-test \
+            dev \
+            false \
+            .
+          python -m json.tool docs/build/versioned-test/versions.json > /dev/null
+
+  docs-publish-plan:
+    if: >-
+      github.repository_owner == 'EDRIXS' &&
+      (github.event_name == 'pull_request' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+       github.event_name == 'release' ||
+       github.event_name == 'workflow_dispatch')
+    name: Plan docs deployment
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      build_stable: ${{ steps.plan.outputs.build_stable }}
+      stable_tag: ${{ steps.plan.outputs.stable_tag }}
+      stable_version: ${{ steps.plan.outputs.stable_version }}
+
+    steps:
+      - name: Checkout existing documentation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: existing-site
+
+      - name: Check the latest stable release
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          stable_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          if [[ ! "${stable_tag}" =~ ^v?[0-9][0-9A-Za-z._-]*$ ]]; then
+            echo "Unsupported release tag: ${stable_tag}" >&2
+            exit 1
+          fi
+          stable_version="${stable_tag#v}"
+          published_version=""
+          if [[ -f existing-site/stable-version.txt ]]; then
+            published_version="$(<existing-site/stable-version.txt)"
+          fi
+
+          build_stable=false
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            build_stable=true
+          elif [[ "${{ github.event_name }}" == "push" && \
+                  "${published_version}" != "${stable_version}" ]]; then
+            build_stable=true
+          fi
+
+          echo "build_stable=${build_stable}" >> $GITHUB_OUTPUT
+          echo "stable_tag=${stable_tag}" >> $GITHUB_OUTPUT
+          echo "stable_version=${stable_version}" >> $GITHUB_OUTPUT
+
+  build-stable-docs:
+    if: needs.docs-publish-plan.outputs.build_stable == 'true'
+    name: Build stable docs
+    runs-on: ubuntu-latest
+    needs: docs-publish-plan
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - name: Checkout the latest stable release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.docs-publish-plan.outputs.stable_tag }}
+
+      - name: Set environment variables
+        env:
+          STABLE_VERSION: ${{ needs.docs-publish-plan.outputs.stable_version }}
+        run: |
+          echo "PYTHON_VERSION_NODOT=312" >> $GITHUB_ENV
+          echo "EDRIXS_DOCS_VERSION=${STABLE_VERSION}" >> $GITHUB_ENV
+
+      - name: Install micromamba with build dependencies
+        uses: mamba-org/setup-micromamba@v3
+        with:
+          init-shell: bash
+          environment-name: build-env
+          create-args: >-
+            python=3.12
+            numpy>=2
+            arpack=*=mpi_openmpi*
+            gfortran
+            openmpi
+
+      - name: Install dependencies
+        run: bash ./scripts/install-deps.sh
+
+      - name: Build documentation
+        run: bash ./scripts/build-docs.sh
+
+      - name: Upload stable documentation
+        uses: actions/upload-artifact@v7
+        with:
+          name: stable-docs
+          path: docs/build/html/
+
+  preview-versioned-docs:
+    if: github.event_name == 'pull_request'
+    name: Preview versioned docs
+    runs-on: ubuntu-latest
+    needs: [test, docs-publish-plan, build-stable-docs]
+    permissions:
+      contents: read
+    env:
+      REPOSITORY_NAME: ${{ github.event.repository.name }}
+      STABLE_VERSION: ${{ needs.docs-publish-plan.outputs.stable_version }}
+
+    steps:
+      - name: Checkout publishing tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: publishing-tools
+
+      - name: Checkout existing documentation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: existing-site
+
+      - name: Download development documentation
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.REPOSITORY_NAME }}-3.12-ubuntu-latest-docs
+          path: docs/build/dev-html/
+
+      - name: Download stable documentation
+        uses: actions/download-artifact@v8
+        with:
+          name: stable-docs
+          path: docs/build/stable-html/
+
+      - name: Assemble preview site
+        run: |
+          bash publishing-tools/scripts/prepare-versioned-docs.sh \
+            docs/build/dev-html \
+            existing-site \
+            docs/build/preview-stage \
+            dev \
+            false \
+            publishing-tools
+          bash publishing-tools/scripts/prepare-versioned-docs.sh \
+            docs/build/stable-html \
+            docs/build/preview-stage \
+            docs/build/preview-root/edrixs \
+            "${STABLE_VERSION}" \
+            true \
+            publishing-tools
+
+      - name: Validate preview site
+        run: |
+          site=docs/build/preview-root/edrixs
+          test -f "${site}/index.html"
+          test -f "${site}/dev/index.html"
+          test -f "${site}/stable/index.html"
+          test -f "${site}/${STABLE_VERSION}/index.html"
+          test "$(<"${site}/stable-version.txt")" == "${STABLE_VERSION}"
+          grep -q 'url=stable/' "${site}/index.html"
+          python -m json.tool "${site}/versions.json" > /dev/null
+          python -c 'import json, os; from pathlib import Path; data = json.loads(Path(os.environ["SITE_MANIFEST"]).read_text()); expected = {"stable", "dev", os.environ["STABLE_VERSION"]}; actual = {item["name"] for item in data["versions"]}; assert expected <= actual, (expected, actual)'
+        env:
+          SITE_MANIFEST: docs/build/preview-root/edrixs/versions.json
+
+      - name: Upload preview site
+        uses: actions/upload-artifact@v7
+        with:
+          name: versioned-docs-preview
+          path: docs/build/preview-root/
+          retention-days: 7
+
   publish-docs:
-    if: github.repository_owner == 'EDRIXS' && github.ref == 'refs/heads/master'
+    if: >-
+      github.repository_owner == 'EDRIXS' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+       github.event_name == 'release' ||
+       github.event_name == 'workflow_dispatch') &&
+      always() &&
+      needs.test.result == 'success' &&
+      needs.docs-publish-plan.result == 'success' &&
+      (needs.build-stable-docs.result == 'success' ||
+       needs.build-stable-docs.result == 'skipped')
     name: Deploy docs
     runs-on: ${{ matrix.host-os }}
-    needs: test
+    needs: [test, docs-publish-plan, build-stable-docs]
+    permissions:
+      contents: write
+    concurrency:
+      group: docs-publish
+      cancel-in-progress: false
 
     strategy:
       matrix:
@@ -152,10 +386,38 @@ jobs:
         shell: bash -l {0}
 
     steps:
+      - name: Select documentation version
+        env:
+          MANUAL_DOCS_VERSION: ${{ inputs.docs_version }}
+          MANUAL_MAKE_STABLE: ${{ inputs.make_stable }}
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "DOCS_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+            echo "MAKE_STABLE=${{ github.event.release.prerelease == false }}" >> $GITHUB_ENV
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "DOCS_VERSION=${MANUAL_DOCS_VERSION}" >> $GITHUB_ENV
+            echo "MAKE_STABLE=${MANUAL_MAKE_STABLE}" >> $GITHUB_ENV
+          else
+            echo "DOCS_VERSION=dev" >> $GITHUB_ENV
+            echo "MAKE_STABLE=false" >> $GITHUB_ENV
+          fi
+
       - name: Set env vars
         run: |
           export REPOSITORY_NAME=${GITHUB_REPOSITORY#*/}  # just the repo, as opposed to org/repo
           echo "REPOSITORY_NAME=${REPOSITORY_NAME}" >> $GITHUB_ENV
+
+      - name: Checkout publishing tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          path: publishing-tools
+
+      - name: Checkout existing documentation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: existing-site
 
       - name: Download docs from GitHub artifacts
         uses: actions/download-artifact@v8
@@ -163,11 +425,54 @@ jobs:
           name: ${{ env.REPOSITORY_NAME }}-${{ matrix.python-version }}-${{ matrix.host-os }}-docs
           path: docs/build/html/
 
+      - name: Assemble versioned documentation
+        run: |
+          bash publishing-tools/scripts/prepare-versioned-docs.sh \
+            docs/build/html \
+            existing-site \
+            docs/build/versioned-current \
+            "${DOCS_VERSION}" \
+            "${MAKE_STABLE}" \
+            publishing-tools
+          echo "PUBLISH_DIR=docs/build/versioned-current" >> $GITHUB_ENV
+
+      - name: Download stable documentation
+        if: needs.docs-publish-plan.outputs.build_stable == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: stable-docs
+          path: docs/build/stable-html/
+
+      - name: Initialize or repair stable documentation
+        if: needs.docs-publish-plan.outputs.build_stable == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLANNED_STABLE_TAG: ${{ needs.docs-publish-plan.outputs.stable_tag }}
+          PLANNED_STABLE_VERSION: ${{ needs.docs-publish-plan.outputs.stable_version }}
+        run: |
+          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          published_version=""
+          if [[ -f docs/build/versioned-current/stable-version.txt ]]; then
+            published_version="$(<docs/build/versioned-current/stable-version.txt)"
+          fi
+
+          if [[ "${latest_tag}" == "${PLANNED_STABLE_TAG}" && \
+                "${published_version}" != "${PLANNED_STABLE_VERSION}" ]]; then
+            bash publishing-tools/scripts/prepare-versioned-docs.sh \
+              docs/build/stable-html \
+              docs/build/versioned-current \
+              docs/build/versioned \
+              "${PLANNED_STABLE_VERSION}" \
+              true \
+              publishing-tools
+            echo "PUBLISH_DIR=docs/build/versioned" >> $GITHUB_ENV
+          fi
+
       - name: Deploy docs to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build/html/
+          publish_dir: ${{ env.PUBLISH_DIR }}/
 
   publish-to-pypi:
     # Hints from:
