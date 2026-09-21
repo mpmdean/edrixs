@@ -91,7 +91,7 @@ def fit_hyb(x, y, N, p0):
 
 def get_hyb(x, e, v):
     """
-    Given the fitted :math:`\\epsilon_{l}` and :math:`V_{l}`, calcualte the
+    Given the fitted :math:`\\epsilon_{l}` and :math:`V_{l}`, calculate the
     hybridization function :math:`\\Delta(\\omega)`,
 
     .. math::
