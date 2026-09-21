@@ -184,7 +184,8 @@ jobs:
   docs-publish-plan:
     if: >-
       github.repository_owner == 'EDRIXS' &&
-      ((github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      (github.event_name == 'pull_request' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
        github.event_name == 'release' ||
        github.event_name == 'workflow_dispatch')
     name: Plan docs deployment
@@ -220,8 +221,10 @@ jobs:
           fi
 
           build_stable=false
-          if [[ "${{ github.event_name }}" == "push" && \
-                "${published_version}" != "${stable_version}" ]]; then
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            build_stable=true
+          elif [[ "${{ github.event_name }}" == "push" && \
+                  "${published_version}" != "${stable_version}" ]]; then
             build_stable=true
           fi
 
@@ -278,8 +281,85 @@ jobs:
           name: stable-docs
           path: docs/build/html/
 
+  preview-versioned-docs:
+    if: github.event_name == 'pull_request'
+    name: Preview versioned docs
+    runs-on: ubuntu-latest
+    needs: [test, docs-publish-plan, build-stable-docs]
+    permissions:
+      contents: read
+    env:
+      REPOSITORY_NAME: ${{ github.event.repository.name }}
+      STABLE_VERSION: ${{ needs.docs-publish-plan.outputs.stable_version }}
+
+    steps:
+      - name: Checkout publishing tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: publishing-tools
+
+      - name: Checkout existing documentation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: existing-site
+
+      - name: Download development documentation
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.REPOSITORY_NAME }}-3.12-ubuntu-latest-docs
+          path: docs/build/dev-html/
+
+      - name: Download stable documentation
+        uses: actions/download-artifact@v8
+        with:
+          name: stable-docs
+          path: docs/build/stable-html/
+
+      - name: Assemble preview site
+        run: |
+          bash publishing-tools/scripts/prepare-versioned-docs.sh \
+            docs/build/dev-html \
+            existing-site \
+            docs/build/preview-stage \
+            dev \
+            false \
+            publishing-tools
+          bash publishing-tools/scripts/prepare-versioned-docs.sh \
+            docs/build/stable-html \
+            docs/build/preview-stage \
+            docs/build/preview-root/edrixs \
+            "${STABLE_VERSION}" \
+            true \
+            publishing-tools
+
+      - name: Validate preview site
+        run: |
+          site=docs/build/preview-root/edrixs
+          test -f "${site}/index.html"
+          test -f "${site}/dev/index.html"
+          test -f "${site}/stable/index.html"
+          test -f "${site}/${STABLE_VERSION}/index.html"
+          test "$(<"${site}/stable-version.txt")" == "${STABLE_VERSION}"
+          grep -q 'url=stable/' "${site}/index.html"
+          python -m json.tool "${site}/versions.json" > /dev/null
+          python -c 'import json, os; from pathlib import Path; data = json.loads(Path(os.environ["SITE_MANIFEST"]).read_text()); expected = {"stable", "dev", os.environ["STABLE_VERSION"]}; actual = {item["name"] for item in data["versions"]}; assert expected <= actual, (expected, actual)'
+        env:
+          SITE_MANIFEST: docs/build/preview-root/edrixs/versions.json
+
+      - name: Upload preview site
+        uses: actions/upload-artifact@v7
+        with:
+          name: versioned-docs-preview
+          path: docs/build/preview-root/
+          retention-days: 7
+
   publish-docs:
     if: >-
+      github.repository_owner == 'EDRIXS' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+       github.event_name == 'release' ||
+       github.event_name == 'workflow_dispatch') &&
       always() &&
       needs.test.result == 'success' &&
       needs.docs-publish-plan.result == 'success' &&

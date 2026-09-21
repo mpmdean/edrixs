@@ -38,3 +38,20 @@ the version recorded in `stable-version.txt` with GitHub's latest
 non-prerelease. If `stable` is missing or outdated, it builds that release tag
 and creates or repairs the immutable release, the `stable` alias, and the root
 redirect before deploying `dev`.
+
+## Previewing versioned documentation from a pull request
+
+Pull-request CI builds the latest stable release, assembles it with the pull
+request's `dev` documentation and the existing Pages content, validates the
+result, and uploads a `versioned-docs-preview` artifact. It does not modify
+GitHub Pages.
+
+Download and extract the artifact, then serve its parent directory:
+
+```bash
+python -m http.server --directory /path/to/extracted/artifact 8000
+```
+
+Open <http://localhost:8000/edrixs/> to exercise the root redirect, version
+selector, and version-specific pages using the same `/edrixs/` path as the
+published site.
