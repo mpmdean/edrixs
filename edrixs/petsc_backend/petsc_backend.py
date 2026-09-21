@@ -7,6 +7,8 @@ recognition or when a PETSc implementation is requested.
 
 from __future__ import annotations
 
+from .options import validate_options
+
 __all__ = [
     'owns_operator_petsc',
     'build_op_petsc',
@@ -51,12 +53,14 @@ def _not_implemented(operation):
 def build_op_petsc(
         emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
     """Build a PETSc many-body operator (stub)."""
+    validate_options('build_op', backend_kws)
     _petsc_module()
     _not_implemented('build_op_petsc')
 
 
 def ed_petsc(hmat_i, num_evals=1, *, backend_kws=None):
     """Obtain low-energy eigenpairs with SLEPc/PETSc (stub)."""
+    validate_options('ed', backend_kws)
     _petsc_module()
     _not_implemented('ed_petsc')
 
@@ -65,6 +69,7 @@ def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
               gamma_c=0.1, thin=1.0, phi=0.0, pol_type=None,
               temperature=1.0, scatter_axis=None, backend_kws=None):
     """Calculate XAS with PETSc (stub)."""
+    validate_options('xas', backend_kws)
     _petsc_module()
     _not_implemented('xas_petsc')
 
@@ -74,5 +79,6 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
                pol_type=None, temperature=1.0, scatter_axis=None,
                skip_gs=False, return_poles=False, backend_kws=None):
     """Calculate RIXS with PETSc (stub)."""
+    validate_options('rixs', backend_kws)
     _petsc_module()
     _not_implemented('rixs_petsc')

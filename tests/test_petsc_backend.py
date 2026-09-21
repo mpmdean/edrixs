@@ -24,10 +24,10 @@ def test_public_symbols_are_exported():
         assert hasattr(backend, name)
 
 
-def test_build_op_stub_accepts_new_shared_builder_options(monkeypatch):
-    """The shared API may pass ``use_numba`` even while PETSc is a stub."""
+def test_build_op_stub_rejects_backend_options_until_implemented(monkeypatch):
+    """The PETSc stub has an explicit empty backend-option contract."""
     monkeypatch.setattr(backend, "_petsc_module", lambda: object())
-    with pytest.raises(NotImplementedError, match="build_op_petsc"):
+    with pytest.raises(TypeError, match=r"petsc\.build_op.*Allowed options: none"):
         backend.build_op_petsc(
             None,
             None,
@@ -35,6 +35,13 @@ def test_build_op_stub_accepts_new_shared_builder_options(monkeypatch):
             use_numba=True,
             backend_kws={"unused": True},
         )
+
+
+def test_build_op_stub_accepts_shared_non_backend_options(monkeypatch):
+    """Shared arguments still reach the intentionally unimplemented stub."""
+    monkeypatch.setattr(backend, "_petsc_module", lambda: object())
+    with pytest.raises(NotImplementedError, match="build_op_petsc"):
+        backend.build_op_petsc(None, None, object(), use_numba=True)
 
 
 @pytest.mark.parametrize(

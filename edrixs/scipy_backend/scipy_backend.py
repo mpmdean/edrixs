@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import inspect
 import warnings
 
@@ -12,6 +11,7 @@ from scipy.sparse.linalg import LinearOperator, aslinearoperator, gmres, lobpcg
 
 from .._solvers_helpers import _expand_broadening
 from .krylov import lanczos_tridiagonal
+from .options import OPTIONS, validate_options
 from ..photon_transition import (
     dipole_polvec_xas, dipole_polvec_rixs, quadrupole_polvec, unit_wavevector,
 )
@@ -24,17 +24,6 @@ __all__ = [
     'ed_dense', 'xas_dense', 'rixs_dense',
     'ed_krylov_scipy', 'xas_krylov_scipy', 'rixs_krylov_scipy',
 ]
-
-
-def _backend_kws(backend_kws):
-    """
-    Validate and copy SciPy backend keyword arguments.
-    """
-    if backend_kws is None:
-        return {}
-    if not isinstance(backend_kws, Mapping):
-        raise TypeError("backend_kws must be a mapping or None")
-    return dict(backend_kws)
 
 
 def owns_operator_scipy(operator):
@@ -291,12 +280,8 @@ def build_op_scipy(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None
     """Build and return a SciPy CSR many-body operator."""
     from .hash_basis_methods import build_op_scipy_matrix
 
-    kws = _backend_kws(backend_kws)
-    tol = kws.pop('tol', 1e-10)
-    if kws:
-        raise TypeError("Unknown SciPy operator-construction options: {}".format(
-            sorted(kws)
-        ))
+    kws = validate_options('build_op', backend_kws)
+    tol = kws.get('tol', OPTIONS['build_op']['tol'].default)
 
     return build_op_scipy_matrix(
         emat, umat, lb, rb, tol=tol, use_numba=use_numba
@@ -305,8 +290,9 @@ def build_op_scipy(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None
 
 def build_op_dense(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
     """Compatibility dense constructor implemented through SciPy CSR."""
+    kws = validate_options('build_op', backend_kws, backend='dense')
     return build_op_scipy(
-        emat, umat, lb, rb, use_numba=use_numba, backend_kws=backend_kws
+        emat, umat, lb, rb, use_numba=use_numba, backend_kws=kws
     ).toarray()
 
 
@@ -319,7 +305,7 @@ def ed_scipy(hmat_i, num_evals=1, *, backend_kws=None):
     """
     Adapt the public ED call to :func:`ed_krylov_scipy`.
     """
-    kws = _backend_kws(backend_kws)
+    kws = validate_options('ed', backend_kws)
     return ed_krylov_scipy(hmat_i, num_gs=num_evals, **kws)
 
 
@@ -329,7 +315,7 @@ def xas_scipy(eval_i, evec_i, hmat_n, trans_op, ominc, *,
     """
     Adapt the public XAS call to :func:`xas_krylov_scipy`.
     """
-    kws = _backend_kws(backend_kws)
+    kws = validate_options('xas', backend_kws)
     return xas_krylov_scipy(
         eval_i, evec_i, hmat_n, trans_op, ominc,
         gamma_c=gamma_c, thin=thin, phi=phi, pol_type=pol_type,
@@ -342,7 +328,7 @@ def rixs_scipy(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
                pol_type=None, temperature=1.0, scatter_axis=None,
                skip_gs=False, return_poles=False, backend_kws=None):
     """Run the SciPy RIXS implementation."""
-    kws = _backend_kws(backend_kws)
+    kws = validate_options('rixs', backend_kws)
     return rixs_krylov_scipy(
         eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss,
         gamma_c=gamma_c, gamma_f=gamma_f, thin=thin, thout=thout,
@@ -352,11 +338,39 @@ def rixs_scipy(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     )
 
 
-# ``dense`` remains an explicit compatibility alias. Dense NumPy arrays are
+# ``dense`` remains an explicit compatibility backend. Dense NumPy arrays are
 # still solved by SciPy until a separate NumPy backend is implemented.
-ed_dense = ed_scipy
-xas_dense = xas_scipy
-rixs_dense = rixs_scipy
+def ed_dense(hmat_i, num_evals=1, *, backend_kws=None):
+    """Run SciPy ED after validating dense-backend options."""
+    kws = validate_options('ed', backend_kws, backend='dense')
+    return ed_krylov_scipy(hmat_i, num_gs=num_evals, **kws)
+
+
+def xas_dense(eval_i, evec_i, hmat_n, trans_op, ominc, *,
+              gamma_c=0.1, thin=1.0, phi=0.0, pol_type=None,
+              temperature=1.0, scatter_axis=None, backend_kws=None):
+    """Run SciPy XAS after validating dense-backend options."""
+    kws = validate_options('xas', backend_kws, backend='dense')
+    return xas_krylov_scipy(
+        eval_i, evec_i, hmat_n, trans_op, ominc,
+        gamma_c=gamma_c, thin=thin, phi=phi, pol_type=pol_type,
+        temperature=temperature, scatter_axis=scatter_axis, **kws
+    )
+
+
+def rixs_dense(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
+               gamma_c=0.1, gamma_f=0.01, thin=1.0, thout=1.0, phi=0.0,
+               pol_type=None, temperature=1.0, scatter_axis=None,
+               skip_gs=False, return_poles=False, backend_kws=None):
+    """Run SciPy RIXS after validating dense-backend options."""
+    kws = validate_options('rixs', backend_kws, backend='dense')
+    return rixs_krylov_scipy(
+        eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss,
+        gamma_c=gamma_c, gamma_f=gamma_f, thin=thin, thout=thout,
+        phi=phi, pol_type=pol_type, temperature=temperature,
+        scatter_axis=scatter_axis, skip_gs=skip_gs,
+        return_poles=return_poles, **kws
+    )
 
 
 # -----------------------------------------------------------------------------

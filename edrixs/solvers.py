@@ -89,8 +89,7 @@ def build_op(emat, umat, lb, rb=None, *, backend='scipy',
     use_numba : bool, optional
         JIT-compile matrix-entry construction. The default is False.
     backend_kws : mapping, optional
-        Backend-specific construction options. For the SciPy backend this
-        includes ``tol``.
+        Backend-specific construction options. See :ref:`backend-options`.
 
     Returns
     -------
@@ -153,8 +152,8 @@ def get_ops(
     use_numba : bool, optional
         JIT-compile matrix-entry construction. The default is False.
     backend_kws : mapping, optional
-        Backend-specific operator-construction options. For the SciPy and
-        dense compatibility backends this includes ``tol``.
+        Backend-specific operator-construction options. See
+        :ref:`backend-options`.
 
     Returns
     -------
@@ -237,7 +236,7 @@ def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
     backend : str or None, optional
         Backend name. When omitted, infer it from ``hmat_i``.
     backend_kws : mapping, optional
-        Backend-specific eigensolver options.
+        Backend-specific eigensolver options. See :ref:`backend-options`.
 
     Returns
     -------
@@ -320,8 +319,7 @@ def xas(eval_i, evec_i, hmat_n, trans_op, ominc, *,
         Numerical backend.  If omitted, infer it from ``hmat_n`` and
         ``trans_op``.  The PETSc backend is currently an unimplemented stub.
     backend_kws : mapping or None, optional
-        Backend-specific solver settings.  For example, the SciPy backend
-        accepts ``nkryl`` for the maximum Lanczos dimension.
+        Backend-specific solver settings. See :ref:`backend-options`.
 
     Returns
     -------
@@ -451,9 +449,7 @@ def rixs(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         Numerical backend.  If omitted, infer it from the Hamiltonians and
         ``trans_op``.  The PETSc backend is currently an unimplemented stub.
     backend_kws : mapping or None, optional
-        Backend-specific solver settings.  For example, the SciPy backend
-        accepts ``nkryl``, ``linsys_tol``, ``linsys_maxiter``, and
-        ``linsys_restart``.
+        Backend-specific solver settings. See :ref:`backend-options`.
 
     Returns
     -------
