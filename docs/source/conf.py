@@ -19,7 +19,10 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../edrixs'))
+source_dir = os.path.abspath(os.path.dirname(__file__))
+repository_root = os.path.abspath(os.path.join(source_dir, '..', '..'))
+sys.path.insert(0, repository_root)
+sys.path.insert(0, os.path.join(source_dir, '_ext'))
 
 
 # -- General configuration ------------------------------------------------
@@ -32,6 +35,7 @@ sys.path.insert(0, os.path.abspath('../../edrixs'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'backend_options',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.githubpages',
@@ -211,3 +215,7 @@ sphinx_gallery_conf = {
      'gallery_dirs': 'auto_examples',  # path to save gallery generated output,
      'within_subsection_order': FileNameSortKey,
 }
+
+# ``FileNameSortKey`` is intentionally a class and therefore cannot be cached
+# by Sphinx. The gallery configuration is rebuilt on every documentation run.
+suppress_warnings = ['config.cache']

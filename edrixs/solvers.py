@@ -89,8 +89,7 @@ def build_op(emat, umat, lb, rb=None, *, backend='scipy',
     use_numba : bool, optional
         JIT-compile matrix-entry construction. The default is False.
     backend_kws : mapping, optional
-        Backend-specific construction options. For the SciPy backend this
-        includes ``tol``.
+        Backend-specific construction options. See :ref:`backend-options`.
 
     Returns
     -------
@@ -153,8 +152,8 @@ def get_ops(
     use_numba : bool, optional
         JIT-compile matrix-entry construction. The default is False.
     backend_kws : mapping, optional
-        Backend-specific operator-construction options. For the SciPy and
-        dense compatibility backends this includes ``tol``.
+        Backend-specific operator-construction options. See
+        :ref:`backend-options`.
 
     Returns
     -------
@@ -237,7 +236,7 @@ def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
     backend : str or None, optional
         Backend name. When omitted, infer it from ``hmat_i``.
     backend_kws : mapping, optional
-        Backend-specific eigensolver options.
+        Backend-specific eigensolver options. See :ref:`backend-options`.
 
     Returns
     -------
@@ -275,7 +274,7 @@ def xas(eval_i, evec_i, hmat_n, trans_op, ominc, *,
     Calculate X-ray absorption spectra through a numerical backend.
 
     Backend-neutral physical arguments are passed directly. Numerical
-    controls such as the Lanczos dimension belong in ``backend_kws``.
+    controls such as the SciPy Lanczos dimension belong in ``backend_kws``.
     When ``backend`` is omitted, it is inferred from ``hmat_n`` and the
     transition operators.
 
@@ -288,8 +287,7 @@ def xas(eval_i, evec_i, hmat_n, trans_op, ominc, *,
         Retained initial-state eigenvectors returned by
         :func:`~edrixs.solvers.ed`.  For the ``'dense'`` and ``'scipy'``
         backends this is a two-dimensional array whose column ``i`` belongs to
-        ``eval_i[i]``; for ``'petsc'`` it is a list of distributed PETSc
-        vectors.
+        ``eval_i[i]``.
     hmat_n : backend-owned operator
         Intermediate-state Hamiltonian, normally returned by
         :func:`~edrixs.solvers.get_ops`.
@@ -321,8 +319,7 @@ def xas(eval_i, evec_i, hmat_n, trans_op, ominc, *,
         Numerical backend.  If omitted, infer it from ``hmat_n`` and
         ``trans_op``.
     backend_kws : mapping or None, optional
-        Backend-specific solver settings.  The SciPy and PETSc backends accept
-        ``nkryl`` for the maximum Lanczos dimension.
+        Backend-specific solver settings. See :ref:`backend-options`.
 
     Returns
     -------
@@ -388,7 +385,7 @@ def rixs(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     Calculate resonant inelastic X-ray scattering spectra through a backend.
 
     Backend-neutral physical arguments are passed directly. Numerical
-    controls such as Lanczos and linear-solver settings belong in
+    controls such as SciPy Lanczos and GMRES settings belong in
     ``backend_kws``. When ``backend`` is omitted, it is inferred from the
     Hamiltonians and transition operators.
 
@@ -405,8 +402,7 @@ def rixs(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         Retained initial-state eigenvectors returned by
         :func:`~edrixs.solvers.ed`.  For the ``'dense'`` and ``'scipy'``
         backends this is a two-dimensional array whose column ``i`` belongs to
-        ``eval_i[i]``; for ``'petsc'`` it is a list of distributed PETSc
-        vectors.
+        ``eval_i[i]``.
     hmat_i : backend-owned operator
         Initial- and final-state Hamiltonian.
     hmat_n : backend-owned operator
@@ -453,10 +449,7 @@ def rixs(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         Numerical backend.  If omitted, infer it from the Hamiltonians and
         ``trans_op``.
     backend_kws : mapping or None, optional
-        Backend-specific solver settings.  For example, the SciPy backend
-        accepts ``nkryl``, ``linsys_tol``, ``linsys_maxiter``, and
-        ``linsys_restart``; PETSc accepts ``nkryl``, ``linsys_tol``,
-        ``linsys_max``, and ``ksp_type``.
+        Backend-specific solver settings. See :ref:`backend-options`.
 
     Returns
     -------
