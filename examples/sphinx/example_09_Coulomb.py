@@ -42,7 +42,7 @@ that one might not anticipate. Our example is based on a :math:`d` atomic shell.
 #
 # where :math:`\alpha`, :math:`\beta`, :math:`\gamma`, :math:`\delta` are
 # orbital indices and :math:`\hat{f}^{\dagger}`
-# (:math:`\hat{f}`) are the creation (anihilation) operators.
+# (:math:`\hat{f}`) are the creation (annihilation) operators.
 # Notice that the indexing order of the last two elements of the tensor
 # is opposite to that of the operators because
 # these operators are associated with a ket state :math:`\ket{\gamma \delta}`,
@@ -71,7 +71,7 @@ umat_chb = edrixs.get_umat_slater('d', F0, F2, F4)
 # and Wigner 3J symbols. Textbooks such as [1]_ can be used for further
 # reference. If you are interested in the details of how
 # EDRIXS does this (and you probably aren't) function :func:`.umat_slater`,
-# constructs the required matrix via Gaunt coeficents from
+# constructs the required matrix via Gaunt coefficients from
 # :func:`.get_gaunt`. Two alternative parameterizations are common.
 # The first are the Racah parameters, which are
 #
@@ -130,7 +130,7 @@ orbitals = ['3z^2-r^2', 'xz', 'yz', 'x^2-y^2', 'xy']
 # :math:`U_0` and :math:`J` as a shorthand for distinguishing these.
 #
 # Before we describe the different types of interactions, we note that since
-# the Coulomb interaction is real, and due to the spin symmmetry properties
+# the Coulomb interaction is real, and due to the spin symmetry properties
 # of the process :math:`U` always obeys
 #
 #   .. math::
@@ -167,7 +167,7 @@ for i in range(0, 5):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Direct Coulomb repulsion between different orbitals depends on terms like
 # :math:`U_{\alpha\sigma,\beta\sigma^\prime,\beta\sigma^\prime,\alpha\sigma}`.
-# Expresions for these parameters are provided in column :math:`U` in
+# Expressions for these parameters are provided in column :math:`U` in
 # :ref:`table_2_orbital`. We can print the values from :code:`umat`
 # like this:
 for i, j in itertools.combinations(range(5), 2):
@@ -179,7 +179,7 @@ for i, j in itertools.combinations(range(5), 2):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Exchange terms exist with the form
 # :math:`U_{\alpha\sigma,\beta\sigma^\prime,\alpha\sigma^\prime,\beta\sigma}`.
-# Expresions for these parameters are provided in column :math:`J` of
+# Expressions for these parameters are provided in column :math:`J` of
 # :ref:`table_2_orbital`. These come from terms like this in the matrix:
 for i, j in itertools.combinations(range(5), 2):
     val = umat[i*2, j*2 + 1, i*2 + 1, j*2].real
@@ -230,7 +230,7 @@ for i, j, k, l in ijkl:
 ################################################################################
 # 6. Four orbital
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Futher multi-orbital terms include
+# Further multi-orbital terms include
 # :math:`U_{\alpha\sigma,\beta\sigma^\prime,\gamma\sigma^\prime,\delta\sigma}`.
 # We can find these here in the matrix:
 ijkl = [[0, 1, 2, 4],

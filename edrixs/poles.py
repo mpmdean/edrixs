@@ -20,8 +20,8 @@ def get_spectra_from_poles(poles_dict, omega_mesh, gamma_mesh, temperature):
     poles_dict: dict
         Dict containing information of poles, which are calculated from
         xas_fsolver and rixs_fsolver.
-        This dict is constructed by
-        :func:`fortran_backend.iostream_fortran.read_poles_from_file`.
+        The private Fortran I/O helper ``read_poles_from_file`` constructs
+        this dictionary from native pole files.
     omega_mesh: 1d float array
         Energy grid.
     gamma_mesh: 1d float array
@@ -34,10 +34,6 @@ def get_spectra_from_poles(poles_dict, omega_mesh, gamma_mesh, temperature):
     spectra: 1d float array
         The calculated XAS or RIXS spectra.
 
-    See also
-    --------
-    fortran_backend.iostream_fortran.read_poles_from_file:
-        Read XAS or RIXS poles files.
     """
     nom = len(omega_mesh)
     spectra = np.zeros(nom, dtype=np.float64)

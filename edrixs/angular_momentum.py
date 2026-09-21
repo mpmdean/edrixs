@@ -635,9 +635,9 @@ def cf_tetragonal_d(ten_dq, d1, d3):
     ten_dq: float scalar
         Parameter used to label cubic crystal splitting.
     d1: float scalar
-        Paramter used to label tetragonal splitting.
+        Parameter used to label tetragonal splitting.
     d3: float scalar
-        Paramter used to label tetragonal splitting.
+        Parameter used to label tetragonal splitting.
 
     Returns
     -------
@@ -706,7 +706,7 @@ def cf_square_planar_d(ten_dq, ds):
     ten_dq: float scalar
         Parameter associated with eg-t2g splitting.
     ds: float scalar
-        Paramter associated with splitting orbitals with
+        Parameter associated with splitting orbitals with
         z-components.
 
     Returns
@@ -740,9 +740,9 @@ def cf_tetragonal_t2g(ten_dq, d1, d3):
     ten_dq: float scalar
         Parameter used to label cubic crystal splitting.
     d1: float scalar
-        Paramter used to label tetragonal splitting.
+        Parameter used to label tetragonal splitting.
     d3: float scalar
-        Paramter used to label tetragonal splitting.
+        Parameter used to label tetragonal splitting.
 
     Returns
     -------

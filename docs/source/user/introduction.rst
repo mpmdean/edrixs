@@ -38,6 +38,11 @@ Fock-basis encoding and spectral conventions are collected separately on the
 :ref:`conventions` page, and the :ref:`pedagogical examples <examples>` work
 through the same material in more physical detail.
 
+If you prefer to begin with a complete calculation, skip ahead to either the
+:ref:`NiO crystal-field example <nio-l23-xas>` or the
+:ref:`NiO Anderson impurity example <nio-siam-xas-rixs>` and return to this
+overview as needed.
+
 .. _physical-model:
 
 The physical model
@@ -137,8 +142,9 @@ The third stage finds the low-energy eigenstates of the many-body Hamiltonian.
 
 * ``eval_i`` is a 1D real array ordered by increasing energy.
 * For the ``dense`` and ``scipy`` backends ``evec_i`` is a 2D complex array; the
-  eigenvector belonging to ``eval_i[k]`` is the column ``evec_i[:, k]``.  For
-  the ``petsc`` backend ``evec_i`` is a list of distributed PETSc vectors.
+  eigenvector belonging to ``eval_i[k]`` is the column ``evec_i[:, k]``.
+* For the ``petsc`` backend ``evec_i`` is a list of distributed PETSc vectors,
+  one for each value in ``eval_i``.
 
 .. _xas:
 
@@ -184,6 +190,8 @@ Where to go next
   numerical options.
 * :ref:`examples` -- pedagogical scripts that build up each concept above with
   physical commentary.
-* :ref:`pythontips` -- practical advice for running and inspecting EDRIXS
-  scripts.
 * :ref:`reference` -- the full API reference.
+
+To put the complete workflow into practice, continue with the
+:ref:`NiO crystal-field example <nio-l23-xas>` or the
+:ref:`NiO Anderson impurity example <nio-siam-xas-rixs>`.

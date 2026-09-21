@@ -144,7 +144,7 @@ print("{} distinct energies".format(len(unique_e)))
 # In this basis, they take a simple form: only the diagonal terms have element
 # 1. We therefore make a 3D empty array and assign the diagonal as 1. Check
 # out the
-# `numpy indexing notes <https://numpy.org/doc/stable/reference/arrays.indexing.html>`_
+# `NumPy indexing notes <https://numpy.org/doc/stable/user/basics.indexing.html>`_
 # if needed.
 nd_real_harmoic_basis = np.zeros((norb, norb, norb), dtype=complex)
 indx = np.arange(norb)

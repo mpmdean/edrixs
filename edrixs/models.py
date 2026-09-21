@@ -259,14 +259,116 @@ def model_2v1c(
 
     Parameters
     ----------
+    shell_name : tuple of str
+        Names of the first valence shell, second valence shell, and core shell,
+        in that order.  Each valence shell must be one of ``'s'``, ``'p'``,
+        ``'t2g'``, ``'d'``, or ``'f'``.  The core shell may additionally be a
+        spin-orbit-split shell such as ``'p12'``, ``'p32'``, ``'d32'``,
+        ``'d52'``, ``'f52'``, or ``'f72'``.
+    shell_level : sequence of three float or None, optional
+        One-body energy levels of the first valence, second valence, and core
+        shells.  All levels default to zero.
+    v1_soc, v2_soc : sequence of two float or None, optional
+        Spin-orbit coupling strengths for the corresponding valence shell in
+        the initial and intermediate Hamiltonians, respectively.  Spin-orbit
+        coupling is omitted when the value is ``None``.
+    c_soc : float, optional
+        Core-shell spin-orbit coupling strength.  This is applied to unsplit
+        ``'p'``, ``'d'``, and ``'f'`` core shells.  Default is zero.
+    v_tot_noccu : int, optional
+        Total number of electrons occupying the two valence shells in the
+        initial state.  Default is one.
+    slater : tuple of two sequences of float or None, optional
+        Slater integrals for the initial and intermediate Hamiltonians.  Each
+        sequence follows the order returned by
+        ``slater_integrals_name(shell_name, ('v1', 'v2', 'c1'))``.  Missing
+        trailing values and all values when ``slater`` is ``None`` are treated
+        as zero.
+    v1_ext_B, v2_ext_B : array-like of float, shape (3,), or None, optional
+        Zeeman/exchange-field coefficients in the global Cartesian frame for
+        the corresponding valence shell.  No field is applied when the value
+        is ``None``.
+    v1_on_which, v2_on_which : {'spin', 'orbital', 'both'}, optional
+        Sector on which the corresponding external field acts.  Default is
+        ``'spin'``.
+    v1_cfmat, v2_cfmat : array-like of complex or None, optional
+        Crystal-field matrix for the corresponding valence shell.  Its shape
+        must match that shell's number of spin-orbitals.  Defaults to zero.
+    v1_othermat, v2_othermat : array-like of complex or None, optional
+        Additional one-body matrix for the corresponding valence shell.  Its
+        shape must match that shell's number of spin-orbitals.  Defaults to
+        zero.
+    hopping_v1v2 : array-like of complex or None, optional
+        Hopping matrix from the second valence shell to the first, with shape
+        ``(v1_norb, v2_norb)``.  Its Hermitian conjugate is inserted
+        automatically.  Defaults to zero.
+    trans_to_which : {1, 2}, optional
+        Valence shell reached by the core-to-valence transition.  Default is
+        the first valence shell.
+    loc_axis : array-like of float, shape (3, 3), or None, optional
+        Rotation from local crystal-field coordinates to the global frame for
+        the transition operators.  The identity rotation is used by default.
     verbose : bool, optional
         If True, print a setup summary (Slater integrals and Hilbert-space
-        dimensions). Default False.
+        dimensions).  Default is False.
+    sparse_U : bool, optional
+        If False, return dense rank-4 Coulomb tensors.  If True, return CSR
+        matrices using the flattened convention
+        ``row = lorb * norb + korb`` and ``col = jorb * norb + iorb``.
+        Default is False.
+    tol : float, optional
+        Absolute-value threshold used when converting Coulomb tensors to
+        sparse form.  Default is ``1e-10``.
 
     Returns
     -------
-    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
-        These can be passed directly to ``get_ops`` with the SciPy or dense backend.
+    emat_i : numpy.ndarray
+        Initial-state one-body matrix over both valence shells, with shape
+        ``(v1v2_norb, v1v2_norb)``.
+    umat_i : numpy.ndarray or scipy.sparse.csr_matrix
+        Initial-state Coulomb interaction over both valence shells.  The dense
+        representation has shape ``(v1v2_norb,) * 4``; the sparse
+        representation has shape ``(v1v2_norb**2, v1v2_norb**2)``.
+    basis_i : FockBasisSpec
+        Initial-state Fock-basis specification with ``v_tot_noccu`` valence
+        electrons.
+    emat_n : numpy.ndarray
+        Intermediate-state one-body matrix over both valence shells and the
+        core shell, with shape ``(ntot, ntot)``.
+    umat_n : numpy.ndarray or scipy.sparse.csr_matrix
+        Intermediate-state Coulomb interaction.  The dense representation has
+        shape ``(ntot,) * 4``; the sparse representation has shape
+        ``(ntot**2, ntot**2)``.
+    basis_n : FockBasisSpec
+        Intermediate-state Fock-basis specification with one additional
+        valence electron and one core hole.
+    trans_mat : numpy.ndarray
+        Core-to-valence transition matrices in the global frame, with shape
+        ``(npol, ntot, ntot)``.
+
+        The returned objects can be passed directly to
+        :func:`~edrixs.solvers.get_ops`.
+
+    See Also
+    --------
+    edrixs.models.model_1v1c
+        Construct a model with one valence shell and one core shell.
+    edrixs.models.model_siam
+        Construct a single-impurity Anderson model.
+    edrixs.solvers.get_ops
+        Convert a model definition into backend-owned many-body operators.
+
+    Examples
+    --------
+    Construct a model for two valence shells and build its SciPy operators:
+
+    >>> import edrixs
+    >>> problem = edrixs.model_2v1c(
+    ...     ('d', 'p', 's'), v_tot_noccu=2, trans_to_which=2
+    ... )
+    >>> hmat_i, hmat_n, trans_ops = edrixs.get_ops(
+    ...     *problem, backend='scipy'
+    ... )
     """
     if verbose:
         print("edrixs >>> Setting up 2v1c problem ...")
@@ -488,7 +590,8 @@ def model_siam(
     Returns
     -------
     emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
-        These can be passed directly to ``get_ops`` with the SciPy or dense backend.
+        These can be passed directly to ``get_ops`` with the SciPy, dense, or
+        PETSc backend.
     """
     if verbose:
         print("edrixs >>> Setting up SIAM problem ...")
