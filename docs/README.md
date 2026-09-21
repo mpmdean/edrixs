@@ -33,7 +33,8 @@ immutable version and, unless it is a prerelease, updates `stable`. Historical
 versions can be built with the workflow's manual `ref`, `docs_version`, and
 `make_stable` inputs.
 
-After versioned publishing is enabled for the first time, run the workflow
-manually with `ref` set to the latest release tag, `docs_version` set to the
-tag without its leading `v`, and `make_stable` enabled. This creates the first
-immutable release, the `stable` alias, and the root redirect.
+The publishing workflow is self-initializing. On a push to `master`, it compares
+the version recorded in `stable-version.txt` with GitHub's latest
+non-prerelease. If `stable` is missing or outdated, it builds that release tag
+and creates or repairs the immutable release, the `stable` alias, and the root
+redirect before deploying `dev`.
