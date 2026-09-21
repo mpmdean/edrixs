@@ -58,7 +58,8 @@ slater = [slater_i, slater_n]
 # Diagonalization
 # ------------------------------------------------------------------------------
 # The EDRIXS interface separates the physical model from the methods used to
-# compute XAS or RIXS. :func:`~edrixs.model_1v1c` returns one-body matrices
+# compute XAS or RIXS. :func:`~edrixs.models.model_1v1c` returns one-body
+# matrices
 # (:code:`emat_i` and :code:`emat_n`), Coulomb tensors (:code:`umat_i` and
 # :code:`umat_n`), compact Fock-basis specifications (:code:`basis_i` and
 # :code:`basis_n`), and Cartesian dipole matrices (:code:`trans_mat`). The
@@ -68,12 +69,13 @@ slater = [slater_i, slater_n]
 # hole, while the :code:`n` quantities describe the intermediate state with a
 # core hole.
 #
-# :func:`~edrixs.get_ops` converts these backend-independent ingredients into
-# many-body initial/final and intermediate Hamiltonians, plus dipole operators
+# :func:`~edrixs.solvers.get_ops` converts these backend-independent
+# ingredients into many-body initial/final and intermediate Hamiltonians, plus
+# dipole operators
 # that map the initial Fock space to the intermediate one. We choose the SciPy
 # backend, which represents these many-body operators as sparse matrices.
-# :func:`~edrixs.ed` then obtains the retained low-energy eigenpairs used
-# by :func:`~edrixs.xas` and :func:`~edrixs.rixs`.
+# :func:`~edrixs.solvers.ed` then obtains the retained low-energy eigenpairs used
+# by :func:`~edrixs.solvers.xas` and :func:`~edrixs.solvers.rixs`.
 # Note that the calculation does not know
 # the core hole energy, so we need to adjust the energy at which the resonance
 # will appear by hand. We know empirically that the resonance is at 11215 eV,

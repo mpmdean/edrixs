@@ -1,0 +1,7 @@
+{% extends "!layout.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <meta name="edrixs-doc-version" content="{{ docs_version|e }}">
+  <meta name="edrixs-doc-site-root" content="{{ docs_site_root|e }}">
+{% endblock %}

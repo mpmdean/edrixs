@@ -21,6 +21,7 @@ from ..poles import get_spectra_from_poles, merge_pole_dicts
 from .iostream_fortran import (
     read_poles_from_file, write_config, write_emat, write_umat,
 )
+from .options import OPTIONS, validate_options
 
 __all__ = [
     'FortranDiskOperator', 'write_problem', 'ed_fortran', 'xas_fortran',
@@ -59,14 +60,6 @@ def _read_config():
         if sep:
             values[key.strip()] = val.strip()
     return int(values['num_val_orbs']), int(values['num_core_orbs'])
-
-
-def _options(backend_kws):
-    if backend_kws is None:
-        return {}
-    if not hasattr(backend_kws, 'get'):
-        raise TypeError("backend_kws must be a mapping or None")
-    return dict(backend_kws)
 
 
 def _communicator(options):
@@ -131,7 +124,7 @@ def write_problem(emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
     MPI communicator only rank zero writes; all ranks share one working
     directory, so no path needs to be exchanged.
     """
-    options = _options(backend_kws)
+    options = validate_options('get_ops', backend_kws)
     comm = _communicator(options)
     # ``basis_i`` is the valence-only initial sector; ``basis_n`` appends the
     # core-hole sector.  The native fock files span the valence orbitals only,
@@ -145,8 +138,9 @@ def write_problem(emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
     def write_inputs():
         write_emat(np.asarray(emat_i), 'hopping_i.in')
         write_emat(np.asarray(emat_n), 'hopping_n.in')
-        write_umat(umat_i, 'coulomb_i.in', options.get('tol', 1e-12))
-        write_umat(umat_n, 'coulomb_n.in', options.get('tol', 1e-12))
+        tol = options.get('tol', OPTIONS['get_ops']['tol'].default)
+        write_umat(umat_i, 'coulomb_i.in', tol)
+        write_umat(umat_n, 'coulomb_n.in', tol)
         write_fock_dec_by_N(num_val_orbs, v_noccu, 'fock_i.in')
         write_fock_dec_by_N(num_val_orbs, v_noccu + 1, 'fock_n.in')
         write_fock_dec_by_N(num_val_orbs, v_noccu, 'fock_f.in')
@@ -185,17 +179,32 @@ def _run_solver(solver, comm, outputs=()):
 
 
 def ed_fortran(hmat_i, num_evals=1, *, backend_kws=None):
-    options = _options(backend_kws)
-    comm = _communicator(options)
+    options = validate_options('ed', backend_kws)
     nvector = int(options.get('nvector', num_evals))
+    if nvector > num_evals:
+        raise ValueError("backend_kws['nvector'] cannot exceed num_evals")
+    comm = _communicator(options)
 
     def prepare_ed():
         num_val_orbs, num_core_orbs = _read_config()
-        write_config(ed_solver=options.get('ed_solver', 1),
-                     num_val_orbs=num_val_orbs, num_core_orbs=num_core_orbs,
-                     neval=num_evals, nvector=nvector, ncv=options.get('ncv', max(3, num_evals + 2)),
-                     idump=options.get('idump', True), maxiter=options.get('maxiter', 500),
-                     min_ndim=options.get('min_ndim', 1000), eigval_tol=options.get('eigval_tol', 1e-8))
+        write_config(
+            ed_solver=options.get(
+                'ed_solver', OPTIONS['ed']['ed_solver'].default
+            ),
+            num_val_orbs=num_val_orbs,
+            num_core_orbs=num_core_orbs,
+            neval=num_evals,
+            nvector=nvector,
+            ncv=options.get('ncv', max(3, num_evals + 2)),
+            idump=options.get('idump', OPTIONS['ed']['idump'].default),
+            maxiter=options.get('maxiter', OPTIONS['ed']['maxiter'].default),
+            min_ndim=options.get(
+                'min_ndim', OPTIONS['ed']['min_ndim'].default
+            ),
+            eigval_tol=options.get(
+                'eigval_tol', OPTIONS['ed']['eigval_tol'].default
+            ),
+        )
 
     def read_eigenvalues():
         data = np.loadtxt('eigvals.dat', ndmin=2)
@@ -226,14 +235,17 @@ def xas_fortran(eval_i, evec_i, hmat_n, trans_op, ominc, *, gamma_c=0.1,
                 thin=1.0, phi=0.0, pol_type=None, temperature=1.0,
                 scatter_axis=None, backend_kws=None):
     """Run XAS collectively on the existing MPI communicator."""
-    options = _options(backend_kws)
+    options = validate_options('xas', backend_kws)
+    num_gs = int(options.get('num_gs', len(eval_i)))
+    if num_gs > len(eval_i):
+        raise ValueError("backend_kws['num_gs'] cannot exceed len(eval_i)")
+    nkryl = int(options.get('nkryl', OPTIONS['xas']['nkryl'].default))
     comm = _communicator(options)
+
     components = _root_collective(comm, _read_transition_components)
     if pol_type is None:
         pol_type = [('isotropic', 0)]
     scatter_axis = np.eye(3) if scatter_axis is None else np.asarray(scatter_axis)
-    num_gs = int(options.get('num_gs', len(eval_i)))
-    nkryl = int(options.get('nkryl', 200))
 
     def prepare_xas():
         num_val_orbs, num_core_orbs = _read_config()
@@ -280,16 +292,19 @@ def rixs_fortran(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss,
                  phi=0.0, pol_type=None, temperature=1.0, scatter_axis=None,
                  skip_gs=False, return_poles=False, backend_kws=None):
     """Run RIXS collectively on the existing MPI communicator."""
-    options = _options(backend_kws)
+    options = validate_options('rixs', backend_kws)
+    num_gs = int(options.get('num_gs', len(eval_i)))
+    if num_gs > len(eval_i):
+        raise ValueError("backend_kws['num_gs'] cannot exceed len(eval_i)")
+    nkryl = int(options.get('nkryl', OPTIONS['rixs']['nkryl'].default))
     comm = _communicator(options)
+
     components = _root_collective(comm, _read_transition_components)
     if skip_gs:
         raise NotImplementedError("skip_gs is not supported by the disk-backed Fortran solver")
     if pol_type is None:
         pol_type = [('linear', 0, 'linear', 0)]
     scatter_axis = np.eye(3) if scatter_axis is None else np.asarray(scatter_axis)
-    num_gs = int(options.get('num_gs', len(eval_i)))
-    nkryl = int(options.get('nkryl', 200))
     gamma_in, gamma_out = _gamma(gamma_c, ominc), _gamma(gamma_f, eloss)
     rixs_fsolver = _solver('rixs_fsolver')
     result, poles = np.zeros((len(ominc), len(eloss), len(pol_type))), []
@@ -299,8 +314,12 @@ def rixs_fortran(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss,
             write_config(
                 num_val_orbs=num_val_orbs,
                 num_core_orbs=num_core_orbs, num_gs=num_gs, nkryl=nkryl,
-                linsys_max=options.get('linsys_max', 1000),
-                linsys_tol=options.get('linsys_tol', 1e-10), omega_in=omega,
+                linsys_max=options.get(
+                    'linsys_maxiter', OPTIONS['rixs']['linsys_maxiter'].default
+                ),
+                linsys_tol=options.get(
+                    'linsys_tol', OPTIONS['rixs']['linsys_tol'].default
+                ), omega_in=omega,
                 gamma_in=gamma_in[iom],
             )
 
