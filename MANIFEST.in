@@ -9,7 +9,7 @@ recursive-exclude * *.py[co]
 
 recursive-include src *.f90 make.* Makefile
 recursive-include docs *.rst conf.py Makefile make.bat
-include docs/source/_ext/backend_options.py
+include docs/source/_ext/backend_options_directive.py
 
 include versioneer.py
 include edrixs/_version.py

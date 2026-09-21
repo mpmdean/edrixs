@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.join(source_dir, '_ext'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'backend_options',
+    'backend_options_directive',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.githubpages',
