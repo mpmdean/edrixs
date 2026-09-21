@@ -139,7 +139,7 @@ rixs = edrixs.rixs(
     backend_kws={
         'nkryl': 190,
         'linsys_tol': 1e-10,
-        'linsys_max': 2000,
+        'linsys_maxiter': 2000,
     },
 )
 rixs_spectrum = rixs[0].sum(axis=-1)

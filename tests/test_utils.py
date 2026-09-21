@@ -1,5 +1,15 @@
+import numpy as np
 import sympy
 import edrixs
+
+
+def test_racah_slater_conversions():
+    """Racah and Slater parameter conversions are mutual inverses."""
+    racah = (6.45, 0.25, 0.35)
+    slater = (6.94, 14.7, 4.41)
+
+    np.testing.assert_allclose(edrixs.ABC_to_F0F2F4(*racah), slater)
+    np.testing.assert_allclose(edrixs.F0F2F4_to_ABC(*slater), racah)
 
 
 def test_CT_imp_bath():

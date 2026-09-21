@@ -9,6 +9,7 @@ from numpy.testing import assert_allclose
 import edrixs.petsc_backend.petsc_backend as backend
 from edrixs.fock_basis import FockBasisSpec
 from edrixs.petsc_backend.lanczos import lanczos_tridiagonal as lanczos_petsc
+from edrixs.petsc_backend.options import validate_options
 from edrixs.scipy_backend.krylov import lanczos_tridiagonal as lanczos_scipy
 from edrixs.solvers import build_op, ed
 
@@ -37,15 +38,15 @@ def test_owns_operator_returns_false_for_non_petsc_objects():
 
 
 def test_backend_kws_validation():
-    assert backend._backend_kws(None) == {}
-    assert backend._backend_kws({"nkryl": 50}) == {"nkryl": 50}
+    assert validate_options('xas', None) == {}
+    assert validate_options('xas', {"nkryl": 50}) == {"nkryl": 50}
     with pytest.raises(TypeError, match="mapping"):
-        backend._backend_kws([("nkryl", 50)])
+        validate_options('xas', [("nkryl", 50)])
 
 
 def test_backend_kws_returns_independent_copy():
     original = {"nkryl": 10}
-    copied = backend._backend_kws(original)
+    copied = validate_options('xas', original)
     copied["nkryl"] = 999
     assert original["nkryl"] == 10
 
@@ -58,10 +59,8 @@ def test_ed_petsc_rejects_nonpositive_num_evals(num_evals):
         backend.ed_petsc(object(), num_evals=num_evals)
 
 
-def test_rixs_petsc_rejects_unknown_options_without_petsc():
-    if HAS_PETSC:
-        pytest.skip("import guard is only meaningful without petsc4py")
-    with pytest.raises(ImportError):
+def test_rixs_petsc_rejects_unknown_options_before_importing_petsc():
+    with pytest.raises(TypeError, match=r"not_a_real_option.*Allowed options"):
         backend.rixs_petsc(
             np.array([0.0]),
             [object()],

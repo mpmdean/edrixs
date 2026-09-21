@@ -8,9 +8,9 @@ module stays cheap and side-effect free.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 import numpy as np
+
+from .options import OPTIONS, validate_options
 
 __all__ = [
     'owns_operator_petsc',
@@ -46,17 +46,6 @@ def _slepc_module():
     return SLEPc
 
 
-def _backend_kws(backend_kws):
-    """
-    Validate and copy PETSc backend keyword arguments.
-    """
-    if backend_kws is None:
-        return {}
-    if not isinstance(backend_kws, Mapping):
-        raise TypeError("backend_kws must be a mapping or None")
-    return dict(backend_kws)
-
-
 def owns_operator_petsc(operator):
     """
     Return whether ``operator`` is a petsc4py matrix or linear operator.
@@ -66,16 +55,6 @@ def owns_operator_petsc(operator):
     except ImportError:
         return False
     return isinstance(operator, (PETSc.Mat, PETSc.Vec))
-
-
-def _not_implemented(operation):
-    """
-    Raise the standard PETSc-backend stub error.
-    """
-    raise NotImplementedError(
-        "The PETSc backend contract is present, but {} has not yet been "
-        "implemented".format(operation)
-    )
 
 
 # -----------------------------------------------------------------------------
@@ -121,20 +100,20 @@ def build_op_petsc(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None
     petsc4py.PETSc.Mat
         The assembled many-body operator.
     """
+    kws = validate_options('build_op', backend_kws)
     PETSc = _petsc_module()
     from .hash_basis_methods import build_op_petsc_matrix
 
-    kws = _backend_kws(backend_kws)
     comm = kws.pop('comm', PETSc.COMM_WORLD)
-    tol_e = kws.pop('tol_e', 1e-10)
-    tol_u = kws.pop('tol_u', 1e-10)
-    nnz_guess_per_row = kws.pop('nnz_guess_per_row', None)
-    mat_type = kws.pop('mat_type', None)
-    assembly_chunk_cols = kws.pop('assembly_chunk_cols', 4096)
-    if kws:
-        raise TypeError(
-            "Unknown PETSc operator-construction options: {}".format(sorted(kws))
-        )
+    tol_e = kws.pop('tol_e', OPTIONS['build_op']['tol_e'].default)
+    tol_u = kws.pop('tol_u', OPTIONS['build_op']['tol_u'].default)
+    nnz_guess_per_row = kws.pop(
+        'nnz_guess_per_row', OPTIONS['build_op']['nnz_guess_per_row'].default
+    )
+    mat_type = kws.pop('mat_type', OPTIONS['build_op']['mat_type'].default)
+    assembly_chunk_cols = kws.pop(
+        'assembly_chunk_cols', OPTIONS['build_op']['assembly_chunk_cols'].default
+    )
 
     return build_op_petsc_matrix(
         emat, umat, lb, rb,
@@ -181,15 +160,13 @@ def ed_petsc(hmat_i, num_evals=1, *, backend_kws=None):
     evec_i : list of petsc4py.PETSc.Vec
         The corresponding eigenvectors (independent copies).
     """
+    kws = validate_options('ed', backend_kws)
     SLEPc = _slepc_module()
 
-    kws = _backend_kws(backend_kws)
-    eigval_tol = kws.pop('eigval_tol', 1e-8)
-    maxiter = kws.pop('maxiter', 1000)
-    ncv = kws.pop('ncv', None)
-    verbose = kws.pop('verbose', False)
-    if kws:
-        raise TypeError("Unknown PETSc ED options: {}".format(sorted(kws)))
+    eigval_tol = kws.pop('eigval_tol', OPTIONS['ed']['eigval_tol'].default)
+    maxiter = kws.pop('maxiter', OPTIONS['ed']['maxiter'].default)
+    ncv = kws.pop('ncv', OPTIONS['ed']['ncv'].default)
+    verbose = kws.pop('verbose', OPTIONS['ed']['verbose'].default)
 
     num_evals = int(num_evals)
     if num_evals < 1:
@@ -398,6 +375,7 @@ def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
     xas : 2d ndarray
         Spectrum with shape ``(len(ominc), len(pol_type))``.
     """
+    kws = validate_options('xas', backend_kws)
     _petsc_module()
     from .lanczos import lanczos_tridiagonal
     from ..poles import get_spectra_from_poles, merge_pole_dicts
@@ -406,10 +384,7 @@ def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
         dipole_polvec_xas, quadrupole_polvec, unit_wavevector,
     )
 
-    kws = _backend_kws(backend_kws)
-    nkryl = int(kws.pop('nkryl', 200))
-    if kws:
-        raise TypeError("Unknown PETSc XAS options: {}".format(sorted(kws)))
+    nkryl = int(kws.pop('nkryl', OPTIONS['xas']['nkryl'].default))
 
     eval_i = np.asarray(eval_i, dtype=float)
     ominc = np.asarray(ominc, dtype=float)
@@ -531,7 +506,7 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
 
         - ``nkryl`` : maximum final-state Lanczos dimension (default ``200``).
         - ``linsys_tol`` : KSP absolute tolerance (default ``1e-10``).
-        - ``linsys_max`` : maximum KSP iterations (default ``1000``).
+        - ``linsys_maxiter`` : maximum KSP iterations (default ``1000``).
         - ``ksp_type`` : KSP method (default ``'gmres'``).
 
     Returns
@@ -541,18 +516,20 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     poles : list, optional
         Returned only when ``return_poles`` is true.
     """
+    kws = validate_options('rixs', backend_kws)
     PETSc = _petsc_module()
     from .lanczos import lanczos_tridiagonal
     from ..poles import get_spectra_from_poles
     from .._solvers_helpers import _expand_broadening
 
-    kws = _backend_kws(backend_kws)
-    nkryl = int(kws.pop('nkryl', 200))
-    linsys_tol = float(kws.pop('linsys_tol', 1e-10))
-    linsys_max = int(kws.pop('linsys_max', 1000))
-    ksp_type = kws.pop('ksp_type', 'gmres')
-    if kws:
-        raise TypeError("Unknown PETSc RIXS options: {}".format(sorted(kws)))
+    nkryl = int(kws.pop('nkryl', OPTIONS['rixs']['nkryl'].default))
+    linsys_tol = float(
+        kws.pop('linsys_tol', OPTIONS['rixs']['linsys_tol'].default)
+    )
+    linsys_maxiter = int(
+        kws.pop('linsys_maxiter', OPTIONS['rixs']['linsys_maxiter'].default)
+    )
+    ksp_type = kws.pop('ksp_type', OPTIONS['rixs']['ksp_type'].default)
 
     eval_i = np.asarray(eval_i, dtype=float)
     ominc = np.asarray(ominc, dtype=float)
@@ -594,7 +571,7 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     shifted = hmat_n.duplicate(copy=True)
     ksp = PETSc.KSP().create(hmat_n.getComm())
     ksp.setType(ksp_type)
-    ksp.setTolerances(atol=linsys_tol, max_it=linsys_max)
+    ksp.setTolerances(atol=linsys_tol, max_it=linsys_maxiter)
     ksp.setFromOptions()
 
     rixs = np.zeros((n_om, neloss, len(pol_type)), dtype=float)

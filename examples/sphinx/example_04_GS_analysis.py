@@ -37,7 +37,7 @@ eval_i = eval_i - eval_i.min()
 # ------------------------------------------------------------------------------
 # We can count the number of :math:`d` electrons by building a single-particle
 # operator :code:`single_particle_Nd` with ones on the diagonal at the nickel
-# :math:`d`-shell orbitals and zeros elsewhere. :func:`~edrixs.build_op`
+# :math:`d`-shell orbitals and zeros elsewhere. :func:`~edrixs.solvers.build_op`
 # transforms this into the many-body operator :code:`O`, whose expectation value
 # in each eigenvector is the :math:`d`-electron count of that state.
 
@@ -64,7 +64,7 @@ ax.plot(eval_i, nd_expect)
 # Every Fock state has a definite :math:`d` occupation, so :math:`O` is diagonal
 # in the Fock basis. :code:`O.getDiagonal()` therefore gives the :math:`d`-electron
 # count of each Fock-basis component, in the same order as the amplitudes of the
-# eigenvectors returned by :func:`~edrixs.ed`.
+# eigenvectors returned by :func:`~edrixs.solvers.ed`.
 nd_per_component = np.rint(O.getDiagonal().getArray().real).astype(int)
 
 alphas = np.empty(len(evec_i))
