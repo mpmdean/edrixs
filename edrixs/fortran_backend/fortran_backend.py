@@ -24,8 +24,8 @@ from .iostream_fortran import (
 from .options import OPTIONS, validate_options
 
 __all__ = [
-    'FortranDiskOperator', 'write_problem', 'ed_fortran', 'xas_fortran',
-    'rixs_fortran', 'owns_operator_fortran',
+    'FortranDiskOperator', 'get_ops_disk', 'write_problem', 'ed_fortran',
+    'xas_fortran', 'rixs_fortran', 'owns_operator_fortran',
 ]
 
 
@@ -116,6 +116,15 @@ def _write_transition_components(trans_mat, fname):
             )
 
 
+def _make_disk_operators(num_trans_ops):
+    """Return Fortran disk handles for a problem's staged operators."""
+    return (
+        FortranDiskOperator(),
+        FortranDiskOperator(),
+        [FortranDiskOperator() for _ in range(num_trans_ops)],
+    )
+
+
 def write_problem(emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
                   *, backend_kws=None):
     """Write the complete native Fortran problem input and return disk handles.
@@ -150,12 +159,7 @@ def write_problem(emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
     _root_collective(comm, write_inputs)
     # The transition components stay on disk in transop_components.in; xas/rixs
     # reload them and write the polarization-specific native input files later.
-    handles = [FortranDiskOperator() for _ in range(len(trans_mat))]
-    return (
-        FortranDiskOperator(),
-        FortranDiskOperator(),
-        handles,
-    )
+    return _make_disk_operators(len(trans_mat))
 
 
 def _solver(name):
@@ -225,6 +229,17 @@ def _read_transition_components():
     values = rows[:, 3] + 1j * rows[:, 4]
     npol = values.size // (ntot * ntot)
     return values.reshape(npol, ntot, ntot)
+
+
+def get_ops_disk():
+    """Return operator handles for the Fortran problem in this directory.
+
+    The native ``config.in`` and ``transop_components.in`` files are read from
+    the current working directory to recover the number of transition
+    components.  No problem files are written or modified.
+    """
+    trans_mat = _read_transition_components()
+    return _make_disk_operators(len(trans_mat))
 
 
 def _gamma(value, mesh):
