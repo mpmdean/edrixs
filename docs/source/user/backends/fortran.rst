@@ -40,6 +40,11 @@ The Fortran backend constructs the complete problem at once, so
 
 .. backend-options:: fortran get_ops
 
+To resume a staged calculation from native input files already present in the
+current working directory, call :func:`~edrixs.solvers.get_ops_disk`.  It
+returns ``hmat_i``, ``hmat_n``, and ``trans_ops`` handles without rewriting
+the problem files.
+
 ``ed``
 ======
 

@@ -3,6 +3,7 @@
 from .fortran_backend import (
     FortranDiskOperator,
     ed_fortran,
+    get_ops_disk,
     owns_operator_fortran,
     rixs_fortran,
     write_problem,
@@ -12,6 +13,7 @@ from .fortran_backend import (
 __all__ = [
     'FortranDiskOperator',
     'ed_fortran',
+    'get_ops_disk',
     'owns_operator_fortran',
     'rixs_fortran',
     'write_problem',

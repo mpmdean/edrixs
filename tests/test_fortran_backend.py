@@ -3,13 +3,14 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 import scipy.sparse as sp
 
 import edrixs
 from edrixs.fortran_backend import fortran_backend
 from edrixs.fortran_backend.iostream_fortran import write_config, write_umat
 from edrixs.models import model_1v1c
-from edrixs.solvers import ed, get_ops, rixs, xas
+from edrixs.solvers import ed, get_ops, get_ops_disk, rixs, xas
 
 
 def _write_poles(stem):
@@ -58,6 +59,34 @@ def test_transition_components_round_trip(tmp_path, monkeypatch):
     )
 
 
+def test_get_ops_disk_recovers_current_directory_handles(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    components = np.arange(12).reshape(3, 2, 2).astype(complex)
+    write_config(num_val_orbs=1, num_core_orbs=1)
+    fortran_backend._write_transition_components(
+        components, 'transop_components.in',
+    )
+
+    hmat_i, hmat_n, transitions = get_ops_disk()
+
+    assert len(transitions) == len(components)
+    handles = (hmat_i, hmat_n, *transitions)
+    assert all(isinstance(handle, fortran_backend.FortranDiskOperator)
+               for handle in handles)
+    assert all(not vars(handle) for handle in handles)
+    assert all(str(tmp_path) in repr(handle) for handle in handles)
+    assert edrixs.get_ops_disk is get_ops_disk
+
+
+def test_get_ops_disk_requires_existing_problem_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(FileNotFoundError) as error:
+        get_ops_disk()
+
+    assert error.value.filename == 'config.in'
+
+
 def test_fortran_backend_uses_native_files_and_f2py_solvers(tmp_path, monkeypatch):
     """The public API delegates all numerical work to the f2py solvers."""
     monkeypatch.chdir(tmp_path)
@@ -91,6 +120,8 @@ def test_fortran_backend_uses_native_files_and_f2py_solvers(tmp_path, monkeypatc
         'fock_i.in', 'fock_n.in', 'fock_f.in', 'config.in',
     ):
         assert (tmp_path / filename).is_file()
+
+    hmat_i, hmat_n, transitions = get_ops_disk()
 
     eval_i, evec_i = ed(hmat_i)
     np.testing.assert_allclose(eval_i, [-0.25])
