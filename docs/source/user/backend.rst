@@ -13,7 +13,9 @@ delegate their numerical work to a backend selected with ``backend``:
 * ``'scipy'`` returns SciPy sparse matrices and uses LOBPCG, Lanczos, and GMRES.
   It is the default backend.
 * ``'fortran'`` uses the native MPI solvers and communicates through files in
-  the current working directory.
+  the current working directory.  We provide the function
+  :func:`edrixs.get_ops_disk <edrixs.solvers.get_ops_disk>` to load the setup
+  from disk if desired.
 * ``'petsc'`` reserves the PETSc backend contract but is not yet implemented.
 
 Backend-specific numerical controls belong in a ``backend_kws`` mapping.  The
