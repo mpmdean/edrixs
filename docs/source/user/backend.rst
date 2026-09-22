@@ -22,6 +22,21 @@ delegate their numerical work to a backend selected with ``backend``:
 Backend-specific numerical controls belong in a ``backend_kws`` mapping.  The
 mapping is specific to both the backend *and the operation*.
 
+Numerical precision
+===================
+
+XAS and RIXS thermally average over the retained initial eigenstates.  Request
+enough eigenpairs from ``ed`` to keep every thermally populated state in the
+ground-state manifold, including complete degenerate or nearly degenerate
+multiplets; otherwise the Boltzmann average is incomplete.
+
+EDRIXS uses established numerical linear-algebra packages, but floating-point
+and iterative solvers are not exact.  If numerical accuracy is a concern,
+repeat the calculation with varied solver settings and check that the result
+is unchanged.  Relevant settings include ``tol`` or ``eigval_tol``,
+``maxiter``, ``blocksize`` or ``ncv``, ``nkryl``, and the RIXS ``linsys_*``
+options documented below.
+
 .. _backend-options:
 
 Backend keyword reference
