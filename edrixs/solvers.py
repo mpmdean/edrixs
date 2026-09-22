@@ -45,7 +45,7 @@ from ._solvers_helpers import (
 
 __all__ = [
     # Backend-neutral staged interface.
-    'build_op', 'get_ops', 'ed', 'xas', 'rixs',
+    'build_op', 'get_ops', 'get_ops_disk', 'ed', 'xas', 'rixs',
 
     # Legacy dense-Python interface.
     'ed_1v1c_py', 'xas_1v1c_py', 'rixs_1v1c_py',
@@ -224,6 +224,22 @@ def get_ops(
         for component in trans_mat
     ]
     return hmat_i, hmat_n, trans_ops
+
+
+def get_ops_disk():
+    """Return handles for a staged Fortran problem in the current directory.
+
+    This reconnects to native Fortran input files previously written by
+    :func:`get_ops` with ``backend='fortran'``.  It does not read operator data
+    into memory or modify the files.
+
+    Returns
+    -------
+    hmat_i, hmat_n, trans_ops
+        Disk-backed Fortran handles for the initial/final Hamiltonian,
+        intermediate Hamiltonian, and transition operators.
+    """
+    return fortran_backend.get_ops_disk()
 
 
 def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
