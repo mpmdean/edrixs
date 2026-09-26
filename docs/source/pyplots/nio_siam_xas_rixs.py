@@ -13,7 +13,7 @@ nbath = 1
 v_noccu = nd + nbath * norb_d
 shell_name = ('d', 'p')
 
-# Screened Slater integrals and monopole interactions from example 03.
+# Screened Slater integrals and monopole interaction
 info = edrixs.get_atom_data('Ni', '3d', nd, edge='L3')
 F2_dd = 0.8 * info['slater_i'][1][1]
 F4_dd = 0.8 * info['slater_i'][2][1]
@@ -100,7 +100,7 @@ eval_i, evec_i = edrixs.ed(
     backend_kws={'tol': 1e-10, 'maxiter': 1000, 'seed': 0},
 )
 
-# Isotropic XAS with the geometry, temperature, and broadening of example 03.
+# Isotropic XAS
 temperature = 300
 thin = 0.0
 phi = 0.0
@@ -122,7 +122,7 @@ xas /= xas.max()
 # polarized; the two outgoing polarization channels are summed below.
 l3_window = energy < edge_shift + 5
 resonance_energy = energy[l3_window][np.argmax(xas[l3_window])]
-energy_loss = np.linspace(-0.2, 10.0, 1201)
+energy_loss = np.arange(-0.5, 5, 0.01)
 rixs = edrixs.rixs(
     eval_i, evec_i, hmat_i, hmat_n, trans_ops,
     np.array([resonance_energy]), energy_loss,
@@ -146,7 +146,7 @@ rixs = edrixs.rixs(
 rixs_spectrum = rixs[0].sum(axis=-1)
 rixs_spectrum /= rixs_spectrum.max()
 
-# Plot XAS and the RIXS energy-loss spectrum side by side.
+# Plot XAS and the RIXS
 fig, (ax_xas, ax_rixs) = plt.subplots(
     1, 2, figsize=(11, 4), constrained_layout=True
 )

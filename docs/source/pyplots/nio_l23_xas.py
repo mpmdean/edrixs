@@ -6,7 +6,7 @@ import numpy as np
 import edrixs
 
 
-# Slater integrals in the order expected for the ('d', 'p') model.
+# Slater integrals
 F2_dd, F4_dd = 11.142, 6.874
 F2_dp, G1_dp, G3_dp = 6.667, 4.922, 2.796
 F0_dd = 2 * (F2_dd + F4_dd) / 63
@@ -19,7 +19,7 @@ slater_n = [
     0.0, 0.0,
 ]
 
-# One-body terms on the 3d shell.
+# emat terms on the 3d shell.
 ten_dq = 1.1
 zeta_3d, zeta_2p = 0.081, 11.498
 exchange = 6 * 0.027
@@ -46,7 +46,6 @@ eval_i, evec_i = edrixs.ed(
     num_evals=3,
     backend=backend,
 )
-excitation_energies = eval_i - eval_i[0]
 
 # Calculate XAS spectrum.
 energy = np.linspace(edge_shift - 10, edge_shift + 20, 3001)
@@ -63,7 +62,7 @@ xas /= xas.max()
 # scattered polarizations represents a measurement without outgoing
 # polarization analysis.
 resonance_energy = energy[np.argmax(xas)]
-energy_loss = np.linspace(-0.2, 5.0, 1001)
+energy_loss = np.arange(-0.5, 5, 0.01)
 rixs = edrixs.rixs(
     eval_i, evec_i, hmat_i, hmat_n, trans_ops,
     np.array([resonance_energy]), energy_loss,
