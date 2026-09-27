@@ -9,18 +9,18 @@ import edrixs
 # Nominal d8 impurity; the wrapper fixes one full bath and a p core.
 nd = 8
 
-# Screened Slater integrals and monopole interaction
+# Screened Slater integrals in eV. The explicit F0 values correspond to
+# average interactions U_dd=7.3 and U_dp=8.5 after subtracting get_F0
+# for the scaled multipolar integrals below; F0 and U are not identical.
 info = edrixs.get_atom_data('Ni', '3d', nd, edge='L3')
 F2_dd = 0.8 * info['slater_i'][1][1]
 F4_dd = 0.8 * info['slater_i'][2][1]
-U_dd = 7.3
-F0_dd = U_dd + edrixs.get_F0('d', F2_dd, F4_dd)
+F0_dd = 7.803669841269841
 
 F2_dp = 0.8 * info['slater_n'][4][1]
 G1_dp = 0.8 * info['slater_n'][5][1]
 G3_dp = 0.8 * info['slater_n'][6][1]
-U_dp = 8.5
-F0_dp = U_dp + edrixs.get_F0('dp', G1_dp, G3_dp)
+F0_dp = 8.921474285714286
 slater = (
     [F0_dd, F2_dd, F4_dd],
     [F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp],

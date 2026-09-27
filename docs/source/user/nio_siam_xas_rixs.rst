@@ -20,7 +20,12 @@ The model parameters are specified before constructing the Hamiltonian:
 
 * ``slater`` contains the initial three d-d integrals and the intermediate
   seven d-d and d-p integrals. Atomic multipolar integrals are scaled to 80%,
-  while the average interactions are set to ``U_dd=7.3`` and ``U_dp=8.5`` eV.
+  and the monopole integrals are specified directly as
+  ``F0_dd=7.803669841269841`` and ``F0_dp=8.921474285714286`` eV.
+  These correspond to average interactions ``U_dd=7.3`` and ``U_dp=8.5`` eV:
+  ``U_dd = F0_dd - get_F0('d', F2_dd, F4_dd)`` and
+  ``U_dp = F0_dp - get_F0('dp', G1_dp, G3_dp)``. Thus the F0 values include
+  the multipolar corrections and are not themselves the average interactions.
 * ``Delta=4.7`` eV is the configuration-average energy cost of transferring
   one bath electron to the impurity, without crystal field, hybridization,
   or multipolar Coulomb interactions. It is not a bare shell-center splitting.
