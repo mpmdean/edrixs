@@ -222,3 +222,24 @@ def test_transform_utensor_nonidentity_matches_einsum_oracle():
     expected = np.einsum('ai,bj,abcd,ck,dl->ijkl',
                          T.conj(), T.conj(), umat, T, T)
     assert np.allclose(transform_utensor(umat, T), expected)
+
+
+@pytest.mark.parametrize("batched", [False, True])
+@pytest.mark.parametrize("as_tuple", [False, True])
+def test_cb_op_accepts_nested_sequences(batched, as_tuple):
+    """Preserve master's array-like input support for operators and transforms."""
+    op = np.array([[1, 2j], [3, 4]], dtype=complex)
+    if batched:
+        op = np.stack([op, 2 * op])
+    left = np.array([[0, 1], [1, 0]], dtype=complex)
+    right = np.array([[1, 0], [0, 1j]], dtype=complex)
+
+    def sequence(array):
+        values = array.tolist()
+        return tuple(values) if as_tuple else values
+
+    actual = cb_op(sequence(op), sequence(left), sequence(right))
+    np.testing.assert_allclose(actual, left.conj().T @ op @ right)
+    np.testing.assert_allclose(
+        cb_op(sequence(op), sequence(left)), left.conj().T @ op @ left
+    )
