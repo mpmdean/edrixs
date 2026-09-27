@@ -26,7 +26,7 @@ from ._solvers_helpers import (
     _valence_zeeman_matrix,
 )
 
-__all__ = ['model_1v1c', 'model_2v1c', 'model_siam', 'model_siam_2v1c']
+__all__ = ['model_1v1c', 'model_2v1c', 'model_siam', 'model_siam_2d1p']
 
 
 def _print_slater_summary(slater_name, slater_i, slater_n):
@@ -775,17 +775,16 @@ def model_siam(
     return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
 
 
-def model_siam_2v1c(
+def model_siam_2d1p(
     *, slater, impurity_levels, bath_levels, hyb, Delta, nd,
     v_soc=None, c_soc=0, om_shift=0, ext_B=None, on_which='spin',
     loc_axis=None, verbose=False, sparse_U=False, tol=1E-10
 ):
     """
-    Set up a d-impurity, one-bath, p-core charge-transfer model.
-
-    This convenience wrapper around :func:`model_siam` fixes ``nbath=1``
-    and uses an uncorrelated, ten-spin-orbital bath. All energies, Slater
-    integrals, hoppings, SOC constants and magnetic-field components are in eV.
+    Set up the commonly used d-impurity, one-bath, p-core charge-transfer
+    model. This is a convenience wrapper around :func:`model_siam`.
+    All energies, Slater integrals, hoppings, SOC constants, and magnetic-field
+    components are in eV. The bath has ten spin-orbitals and no Coulomb interaction.
 
     Parameters
     ----------
@@ -796,14 +795,17 @@ def model_siam_2v1c(
         the corresponding :func:`get_F0` contribution from its F0 integrals.
     impurity_levels, bath_levels : array_like, shape (5,)
         Real orbital offsets in the order ``(dz2, dzx, dzy, dx2-y2, dxy)``.
-        Each offset applies to both spins and is added unchanged to the
-        charge-transfer-derived shell center. Means are not subtracted.
+        The mean of each five-orbital array is subtracted before adding the
+        charge-transfer-derived shell center. Each level applies to both spins;
+        the input arrays are not modified.
     hyb : array_like, shape (5,)
         Orbital-diagonal impurity-to-bath hoppings in the same order. Complex
         values are allowed. Both spins and both states use the same hoppings.
     Delta : float
-        Many-electron charge-transfer energy in the atomic limit without
-        orbital offsets or hybridization, not the bare shell-center splitting.
+        Charge-transfer energy. This is defined in the atomic limit
+        (without crystal field, hybridization, or multipolar Coulomb
+        interactions) as the energy cost of transferring
+        one electron from the bath to the impurity.
         Used for both states in :func:`CT_imp_bath` and
         :func:`CT_imp_bath_core_hole`.
     nd : int
@@ -836,6 +838,9 @@ def model_siam_2v1c(
     if v_soc is None:
         v_soc = (0, 0)
 
+    # Center the orbital splittings before applying the CT-derived energies.
+    impurity_levels = np.asarray(impurity_levels) - np.mean(impurity_levels)
+    bath_levels = np.asarray(bath_levels) - np.mean(bath_levels)
     U_dd_i = slater_i[0] - get_F0('d', *slater_i[1:3])
     U_dd_n = slater_n[0] - get_F0('d', *slater_n[1:3])
     U_dp = slater_n[3] - get_F0('dp', *slater_n[5:7])

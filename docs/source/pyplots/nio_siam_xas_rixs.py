@@ -6,12 +6,8 @@ import numpy as np
 import edrixs
 
 
-# Model size: a nominal d8 impurity plus one filled ten-orbital bath.
+# Nominal d8 impurity; the wrapper fixes one full bath and a p core.
 nd = 8
-norb_d = 10
-nbath = 1
-v_noccu = nd + nbath * norb_d
-shell_name = ('d', 'p')
 
 # Screened Slater integrals and monopole interaction
 info = edrixs.get_atom_data('Ni', '3d', nd, edge='L3')
@@ -30,65 +26,34 @@ slater = (
     [F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp],
 )
 
-# Convert the charge-transfer energy into impurity, ligand, and core levels.
+# Configuration-average charge-transfer energy, not a bare level splitting.
+# The wrapper derives the initial and core-hole shell centers internally.
 Delta = 4.7
-E_d, E_L = edrixs.CT_imp_bath(U_dd, Delta, nd)
-E_dc, E_Lc, E_p = edrixs.CT_imp_bath_core_hole(
-    U_dd, U_dp, Delta, nd
-)
 
-# Work in the real-harmonic basis used for the bath parameterization.
-trans_c2n = edrixs.tmat_c2r('d', True)
+# Five orbital energies in (dz2, dzx, dzy, dx2-y2, dxy) order, in eV.
+# Each set is recentered internally, then duplicated for the two spins.
 ten_dq = 0.56
-orbital_energies = np.repeat(
-    [0.6 * ten_dq, -0.4 * ten_dq, -0.4 * ten_dq,
-     0.6 * ten_dq, -0.4 * ten_dq],
-    2,
-)
-crystal_field = np.diag(orbital_energies).astype(complex)
-soc = edrixs.cb_op(
-    edrixs.atom_hsoc('d', info['v_soc_i'][0]), trans_c2n
-)
-imp_mat = crystal_field + soc + E_d * np.eye(norb_d)
-imp_mat_n = crystal_field + soc + E_dc * np.eye(norb_d)
-
-# Bath crystal field and impurity--bath hybridization.
+impurity_levels = ten_dq * np.array([0.6, -0.4, -0.4, 0.6, -0.4])
 ten_dq_bath = 1.44
-bath_splitting = np.repeat(
-    [0.6 * ten_dq_bath, -0.4 * ten_dq_bath, -0.4 * ten_dq_bath,
-     0.6 * ten_dq_bath, -0.4 * ten_dq_bath],
-    2,
-)
-bath_level = E_L + bath_splitting[np.newaxis, :]
-bath_level_n = E_Lc + bath_splitting[np.newaxis, :]
+bath_levels = ten_dq_bath * np.array([0.6, -0.4, -0.4, 0.6, -0.4])
+hyb = [2.06, 1.21, 1.21, 2.06, 1.21]
 
-hyb = np.zeros((nbath, norb_d), dtype=complex)
-hyb[0] = np.repeat([2.06, 1.21, 1.21, 2.06, 1.21], 2)
+# Keep the original parameterization: equal impurity SOC in both states.
+# The second entry can instead be info['v_soc_n'][0].
+v_soc = (info['v_soc_i'][0], info['v_soc_i'][0])
 
 # Effective exchange field along the [112] direction.
 exchange = 6 * 0.027
 ext_B = exchange / (2 * np.sqrt(6)) * np.array([1.0, 1.0, 2.0])
 
-# The core-level shift places the calculated spectrum near the Ni L edge.
+# Align the calculated spectrum with the Ni L edge. The wrapper handles
+# the CT-derived core energy and returns the seven standard model outputs.
 edge_shift = 857.6
-c_level = -edge_shift - 5 * E_p
-problem = edrixs.model_siam(
-    shell_name,
-    nbath,
-    siam_type=0,
-    v_noccu=v_noccu,
-    c_level=c_level,
-    c_soc=info['c_soc'],
-    trans_c2n=trans_c2n,
-    imp_mat=imp_mat,
-    imp_mat_n=imp_mat_n,
-    bath_level=bath_level,
-    bath_level_n=bath_level_n,
-    hyb=hyb,
-    slater=slater,
-    ext_B=ext_B,
-    on_which='spin',
-    sparse_U=True,
+problem = edrixs.model_siam_2d1p(
+    slater=slater, nd=nd, Delta=Delta,
+    impurity_levels=impurity_levels, bath_levels=bath_levels, hyb=hyb,
+    v_soc=v_soc, c_soc=info['c_soc'], om_shift=edge_shift,
+    ext_B=ext_B, on_which='spin', sparse_U=True,
 )
 
 backend = 'scipy'

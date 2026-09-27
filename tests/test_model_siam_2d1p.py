@@ -41,15 +41,17 @@ def explicit_model(p):
     edc = elc + delta - un * n - 6 * udp
     t = edrixs.tmat_c2r('d', True)
     soc = p['v_soc']
+    impurity = np.asarray(p['impurity_levels']) - np.mean(p['impurity_levels'])
+    bath = np.asarray(p['bath_levels']) - np.mean(p['bath_levels'])
     return edrixs.model_siam(
         ('d', 'p'), 1, v_noccu=n + 10, slater=p['slater'],
         trans_c2n=t, c_level=-p['om_shift'] - 5 * ep, c_soc=p['c_soc'],
-        imp_mat=np.diag(np.repeat(p['impurity_levels'], 2) + ed)
+        imp_mat=np.diag(np.repeat(impurity, 2) + ed)
         + edrixs.cb_op(edrixs.atom_hsoc('d', soc[0]), t),
-        imp_mat_n=np.diag(np.repeat(p['impurity_levels'], 2) + edc)
+        imp_mat_n=np.diag(np.repeat(impurity, 2) + edc)
         + edrixs.cb_op(edrixs.atom_hsoc('d', soc[1]), t),
-        bath_level=np.array([np.repeat(p['bath_levels'], 2) + el]),
-        bath_level_n=np.array([np.repeat(p['bath_levels'], 2) + elc]),
+        bath_level=np.array([np.repeat(bath, 2) + el]),
+        bath_level_n=np.array([np.repeat(bath, 2) + elc]),
         hyb=np.array([np.repeat(p['hyb'], 2)]), ext_B=p['ext_B'],
         loc_axis=p.get('loc_axis'),
     )
@@ -64,7 +66,7 @@ def test_explicit_equivalence(params, modified):
         params['bath_levels'] -= .7
         params['hyb'] = np.array(params['hyb']) + .4j
         params['loc_axis'] = np.array([[0., -1., 0.], [1., 0., 0.], [0., 0., 1.]])
-    actual = edrixs.model_siam_2v1c(**params)
+    actual = edrixs.model_siam_2d1p(**params)
     expected = explicit_model(params)
     for i in (0, 1, 3, 4, 6):
         assert_allclose(actual[i], expected[i], atol=1e-10)
@@ -77,14 +79,14 @@ def test_explicit_equivalence(params, modified):
 
 
 def test_sparse_and_shift(params):
-    original = edrixs.model_siam_2v1c(**params)
-    sparse = edrixs.model_siam_2v1c(**params, sparse_U=True)
+    original = edrixs.model_siam_2d1p(**params)
+    sparse = edrixs.model_siam_2d1p(**params, sparse_U=True)
     for i in (1, 4):
         dim = original[i].shape[0] ** 2
         assert_allclose(sparse[i].toarray(), original[i].reshape(dim, dim), atol=1e-10)
     shift = 2.5
     params['om_shift'] += shift
-    shifted = edrixs.model_siam_2v1c(**params)
+    shifted = edrixs.model_siam_2d1p(**params)
     di = shifted[0] - original[0]
     dn = shifted[3] - original[3]
     assert_allclose(di, -6 * shift / 18 * np.eye(20), atol=1e-12)
@@ -99,6 +101,19 @@ def test_sparse_and_shift(params):
 def test_occupancy_boundaries_and_defaults(params, nd):
     params['nd'] = nd
     params.pop('v_soc')
-    result = edrixs.model_siam_2v1c(**params)
+    result = edrixs.model_siam_2d1p(**params)
     assert result[2].shapes == ((20, nd + 10),)
     assert result[5].shapes == ((20, nd + 11), (6, 5))
+
+
+def test_recentering_accepts_lists_and_preserves_inputs(params):
+    original_impurity = params['impurity_levels'].copy()
+    original_bath = params['bath_levels'].copy()
+    reference = edrixs.model_siam_2d1p(**params)
+    assert_allclose(params['impurity_levels'], original_impurity)
+    assert_allclose(params['bath_levels'], original_bath)
+    params['impurity_levels'] = (original_impurity + 3).tolist()
+    params['bath_levels'] = (original_bath - 2).tolist()
+    shifted = edrixs.model_siam_2d1p(**params)
+    for i in (0, 1, 3, 4, 6):
+        assert_allclose(shifted[i], reference[i], atol=1e-10)
