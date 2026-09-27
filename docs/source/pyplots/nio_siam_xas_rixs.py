@@ -11,14 +11,15 @@ nd = 8
 
 # Screened Slater integrals in eV.
 info = edrixs.get_atom_data('Ni', '3d', nd, edge='L3')
+F0_dd = 7.8
 F2_dd = 0.8 * info['slater_i'][1][1]
 F4_dd = 0.8 * info['slater_i'][2][1]
-F0_dd = 7.8
 
+F0_dp = 8.9
 F2_dp = 0.8 * info['slater_n'][4][1]
 G1_dp = 0.8 * info['slater_n'][5][1]
 G3_dp = 0.8 * info['slater_n'][6][1]
-F0_dp = 8.9
+
 slater = (
     [F0_dd, F2_dd, F4_dd],
     [F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp],
