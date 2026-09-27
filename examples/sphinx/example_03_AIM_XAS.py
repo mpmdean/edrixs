@@ -295,6 +295,28 @@ out = edrixs.model_siam(
 emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
 
 ################################################################################
+# Alternatively, :func:`~edrixs.models.model_siam_2v1c` constructs the same
+# model directly from five real-orbital offsets and hoppings. The explicit
+# construction above shows the matrices that this convenience function builds.
+# Offsets are ordered (dz2, dzx, dzy, dx2-y2, dxy) and are not recentered.
+# Delta retains its many-electron charge-transfer meaning; the wrapper derives
+# the shell centers and core energy alignment internally.
+#
+# The following call can replace the model_siam call above::
+#
+#     out = edrixs.model_siam_2v1c(
+#         slater=slater, nd=nd, Delta=Delta,
+#         impurity_levels=ten_dq * np.array([.6, -.4, -.4, .6, -.4]),
+#         bath_levels=ten_dq_bath * np.array([.6, -.4, -.4, .6, -.4]),
+#         hyb=[Veg, Vt2g, Vt2g, Veg, Vt2g],
+#         v_soc=(zeta_d_i, zeta_d_i), c_soc=c_soc, om_shift=om_shift,
+#         ext_B=ext_B, on_which=on_which,
+#     )
+#
+# Both SOC entries use zeta_d_i to reproduce the explicit construction exactly.
+# To use the distinct intermediate-state SOC, pass (zeta_d_i, zeta_d_n).
+
+################################################################################
 # Diagonalization
 # ------------------------------------------------------------------------------
 # :func:`~edrixs.solvers.get_ops` converts these backend-independent
