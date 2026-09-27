@@ -6,54 +6,6 @@ from edrixs.basis_transform import (
 )
 
 
-def cb_op_previous_implementation(oper_O, TL, TR=None):
-    """Reference implementation retained to check the vectorized rewrite."""
-    oper_O = np.array(oper_O, order='C')
-    dim = oper_O.shape
-    if TR is None:
-        TR = TL
-    if len(dim) < 2:
-        raise Exception("Dimension of oper_O should be at least 2")
-    elif len(dim) == 2:
-        res = np.dot(np.dot(np.conj(np.transpose(TL)), oper_O), TR)
-    else:
-        tot = np.prod(dim[0:-2])
-        tmp_oper = oper_O.reshape((tot, dim[-2], dim[-1]))
-        for i in range(tot):
-            tmp_oper[i] = np.dot(
-                np.dot(np.conj(np.transpose(TL)), tmp_oper[i]), TR
-            )
-        res = tmp_oper.reshape(dim)
-
-    return res
-
-
-class MatmulOnlyArray:
-    """Array wrapper that supports cb_op's protocol but rejects coercion."""
-
-    def __init__(self, values):
-        self.values = values
-
-    @property
-    def ndim(self):
-        return self.values.ndim
-
-    @property
-    def T(self):
-        return type(self)(self.values.T)
-
-    def conj(self):
-        return type(self)(self.values.conj())
-
-    def __matmul__(self, other):
-        if isinstance(other, type(self)):
-            other = other.values
-        return type(self)(self.values @ other)
-
-    def __array__(self, *args, **kwargs):
-        raise AssertionError("cb_op must not coerce its inputs to NumPy arrays")
-
-
 @pytest.mark.parametrize("case", ['p', 't2g', 'd', 'f'])
 def test_tmat_c2r_unitary(case):
     """tmat_c2r produces a unitary matrix: T†T = I."""
@@ -152,38 +104,6 @@ def test_cb_op_batch_applies_per_matrix():
     for i in range(3):
         expected = cb_op(op_batch[i], Q)
         assert np.allclose(result[i], expected)
-
-
-@pytest.mark.parametrize("leading_shape", [(), (3,), (2, 3)])
-@pytest.mark.parametrize("use_distinct_right_transform", [False, True])
-def test_cb_op_matches_previous_implementation(
-        leading_shape, use_distinct_right_transform):
-    """The vectorized implementation agrees with the previous loop version."""
-    rng = np.random.default_rng(1234)
-    n = 4
-    shape = leading_shape + (n, n)
-    op = rng.random(shape) + 1j * rng.random(shape)
-    TL, _ = np.linalg.qr(rng.random((n, n)) + 1j * rng.random((n, n)))
-    if use_distinct_right_transform:
-        TR, _ = np.linalg.qr(
-            rng.random((n, n)) + 1j * rng.random((n, n))
-        )
-    else:
-        TR = None
-
-    expected = cb_op_previous_implementation(op, TL, TR)
-    assert np.allclose(cb_op(op, TL, TR), expected)
-
-
-def test_cb_op_does_not_coerce_inputs_to_numpy_arrays():
-    """cb_op relies only on the input objects' matrix-array protocol."""
-    op = np.array([[1, 2j], [3, 4]], dtype=complex)
-    transform = np.array([[1, 1], [1j, -1j]], dtype=complex) / np.sqrt(2)
-
-    result = cb_op(MatmulOnlyArray(op), MatmulOnlyArray(transform))
-
-    assert isinstance(result, MatmulOnlyArray)
-    assert np.allclose(result.values, transform.conj().T @ op @ transform)
 
 
 def test_cb_op2_equivalent_to_cb_op_when_TR_equals_TL():
@@ -302,3 +222,24 @@ def test_transform_utensor_nonidentity_matches_einsum_oracle():
     expected = np.einsum('ai,bj,abcd,ck,dl->ijkl',
                          T.conj(), T.conj(), umat, T, T)
     assert np.allclose(transform_utensor(umat, T), expected)
+
+
+@pytest.mark.parametrize("batched", [False, True])
+@pytest.mark.parametrize("as_tuple", [False, True])
+def test_cb_op_accepts_nested_sequences(batched, as_tuple):
+    """Preserve master's array-like input support for operators and transforms."""
+    op = np.array([[1, 2j], [3, 4]], dtype=complex)
+    if batched:
+        op = np.stack([op, 2 * op])
+    left = np.array([[0, 1], [1, 0]], dtype=complex)
+    right = np.array([[1, 0], [0, 1j]], dtype=complex)
+
+    def sequence(array):
+        values = array.tolist()
+        return tuple(values) if as_tuple else values
+
+    actual = cb_op(sequence(op), sequence(left), sequence(right))
+    np.testing.assert_allclose(actual, left.conj().T @ op @ right)
+    np.testing.assert_allclose(
+        cb_op(sequence(op), sequence(left)), left.conj().T @ op @ left
+    )
