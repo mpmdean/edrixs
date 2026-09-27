@@ -53,6 +53,9 @@ import matplotlib.pyplot as plt
 # Hybridization redistributes these electrons while conserving their total.
 # All model energies and hoppings below are in eV.
 nd = 8
+# Fixed model dimensions, also used by the following analysis examples.
+norb_d = 10
+nbath = 1
 
 ################################################################################
 # Coulomb interactions
