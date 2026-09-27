@@ -792,7 +792,7 @@ def model_siam_2d1p(
         Initial ``[F0_dd, F2_dd, F4_dd]`` and intermediate
         ``[F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp]``.
         Each state's average Coulomb interactions are recovered by subtracting
-        the corresponding :func:`get_F0` contribution from its F0 integrals.
+        the corresponding :func:`~edrixs.coulomb_utensor.get_F0` contribution from its F0 integrals.
     impurity_levels, bath_levels : array_like, shape (5,)
         Real orbital offsets in the order ``(dz2, dzx, dzy, dx2-y2, dxy)``.
         The mean of each five-orbital array is subtracted before adding the
@@ -806,8 +806,8 @@ def model_siam_2d1p(
         (without crystal field, hybridization, or multipolar Coulomb
         interactions) as the energy cost of transferring
         one electron from the bath to the impurity.
-        Used for both states in :func:`CT_imp_bath` and
-        :func:`CT_imp_bath_core_hole`.
+        Used for both states in :func:`~edrixs.utils.CT_imp_bath` and
+        :func:`~edrixs.utils.CT_imp_bath_core_hole`.
     nd : int
         Nominal impurity occupancy, from 0 through 9. The nominal bath is full;
         the initial total valence occupancy is ``nd + 10``.
@@ -827,7 +827,7 @@ def model_siam_2d1p(
     Returns
     -------
     emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
-        The seven model_siam outputs, ready for :func:`get_ops`. One-body
+        The seven model_siam outputs, ready for :func:`~edrixs.solvers.get_ops`. One-body
         matrices have shapes (20, 20) and (26, 26) and use complex spherical
         harmonics. Basis metadata fixes initial valence occupancy to nd+10,
         intermediate valence occupancy to nd+11, and core occupancy to five.
