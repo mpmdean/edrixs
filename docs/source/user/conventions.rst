@@ -15,6 +15,9 @@ same material in more physical detail.
 Energies and naming
 ===================
 
+* **Electron vs. hole language.** EDRIXS defaults to using electron language.
+  Using hole language involves inverting the energy levels in ``emat`` and
+  taking the conjugate transpose of the absorption and emission operators.
 * **Units.** All energies are in **eV**.
 * **Initial and intermediate states.** Throughout EDRIXS, an ``_i`` suffix
   labels the initial and final states, which have no core hole, and ``_n`` the
@@ -34,6 +37,15 @@ Energies and naming
   by the calculation.  The resonance position is set by hand through
   ``shell_level`` (or ``c_level``) together with an offset chosen to match
   experiment.
+
+Shells
+======
+
+The standard model constructors omit the filled, inactive core shell from the
+initial-state basis. The intermediate-state basis explicitly includes the core
+shell with one electron removed and the valence sector with one additional
+electron. For SIAM models, the valence sector includes both impurity and bath
+orbitals. The energies of the different states need to be set with this in mind.
 
 Default orbital ordering and single-particle bases
 ==================================================
