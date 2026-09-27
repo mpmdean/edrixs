@@ -578,10 +578,10 @@ def model_siam(
 
     Construct backend-independent one-body matrices, Coulomb interactions,
     Fock-basis specifications, and core-to-impurity transition matrices. This
-    is the setup analogue of :func:`ed_siam_fort` at fixed ``v_noccu``; it
-    does not search over occupancies, build many-body Hamiltonians, or
-    diagonalize them. Pass the returned tuple to :func:`get_ops` to construct
-    the many-body operators.
+    is the setup analogue of :func:`~edrixs.solvers.ed_siam_fort` at fixed
+    ``v_noccu``; it does not search over occupancies, build many-body
+    Hamiltonians, or diagonalize them. Pass the returned tuple to
+    :func:`~edrixs.solvers.get_ops` to construct the many-body operators.
 
     All energies, Slater integrals, hybridizations, spin-orbit coupling
     constants, and magnetic-field components are in eV. Let ``v_norb`` and
