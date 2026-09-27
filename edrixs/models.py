@@ -11,12 +11,13 @@ import numpy as np
 
 from .angular_momentum import get_lx, get_ly, get_lz, get_sx, get_sy, get_sz
 from .angular_momentum import get_wigner_dmat, rmat_to_euler
-from .basis_transform import cb_op, tmat_r2c
-from .coulomb_utensor import get_umat_slater, get_umat_slater_3shells
+from .basis_transform import cb_op, tmat_c2r, tmat_r2c
+from .coulomb_utensor import get_F0, get_umat_slater, get_umat_slater_3shells
 from .fock_basis import FockBasisSpec
 from .photon_transition import get_trans_oper
 from .soc import atom_hsoc
-from .utils import info_atomic_shell, slater_integrals_name
+from .utils import (CT_imp_bath, CT_imp_bath_core_hole, info_atomic_shell,
+                    slater_integrals_name)
 from ._solvers_helpers import (
     _embed_impurity_core_umat,
     _embed_impurity_core_umat_sparse,
@@ -25,7 +26,7 @@ from ._solvers_helpers import (
     _valence_zeeman_matrix,
 )
 
-__all__ = ['model_1v1c', 'model_2v1c', 'model_siam']
+__all__ = ['model_1v1c', 'model_2v1c', 'model_siam', 'model_siam_2d1p']
 
 
 def _print_slater_summary(slater_name, slater_i, slater_n):
@@ -773,3 +774,92 @@ def model_siam(
         print("edrixs >>> SIAM setup Done !")
 
     return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
+
+
+def model_siam_2d1p(
+    *, slater, impurity_levels, bath_levels, hyb, Delta, nd,
+    v_soc=None, c_soc=0, om_shift=0, ext_B=None, on_which='spin',
+    loc_axis=None, verbose=False, sparse_U=False, tol=1E-10
+):
+    """
+    Set up the commonly used d-impurity, one-bath, p-core charge-transfer
+    model. This is a convenience wrapper around :func:`model_siam`.
+    All energies, Slater integrals, hoppings, SOC constants, and magnetic-field
+    components are in eV. The bath has ten spin-orbitals and no Coulomb interaction.
+
+    Parameters
+    ----------
+    slater : tuple of array_like
+        Initial ``[F0_dd, F2_dd, F4_dd]`` and intermediate
+        ``[F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp]``.
+        Each state's average Coulomb interactions are recovered by subtracting
+        the corresponding ``get_F0`` contribution from its F0 integrals.
+    impurity_levels, bath_levels : array_like, shape (5,)
+        Real orbital offsets in the order ``(dz2, dzx, dzy, dx2-y2, dxy)``.
+        The mean of each five-orbital array is subtracted before adding the
+        charge-transfer-derived shell center. Each level applies to both spins;
+        the input arrays are not modified.
+    hyb : array_like, shape (5,)
+        Orbital-diagonal impurity-to-bath hoppings in the same order. Complex
+        values are allowed. Both spins and both states use the same hoppings.
+    Delta : float
+        Charge-transfer energy. This is defined in the atomic limit
+        (without crystal field, hybridization, or multipolar Coulomb
+        interactions) as the energy cost of transferring
+        one electron from the bath to the impurity.
+        Used for both states in :func:`~edrixs.utils.CT_imp_bath` and
+        :func:`~edrixs.utils.CT_imp_bath_core_hole`.
+    nd : int
+        Nominal impurity occupancy, from 0 through 9. The nominal bath is full;
+        the initial total valence occupancy is ``nd + 10``.
+    v_soc : pair of float, optional
+        Initial and intermediate impurity SOC constants. None means zero.
+    c_soc : float, optional
+        Core SOC constant. Default zero.
+    om_shift : float, optional
+        Overall XAS energy alignment. The core energy passed to model_siam is
+        ``-om_shift - 5*E_p``, where E_p comes from the core-hole CT helper.
+        Increasing om_shift raises transition energies by the same amount.
+        Default zero; the filled-core reference convention is preserved.
+    ext_B, on_which, loc_axis, verbose, sparse_U, tol
+        Passed through to :func:`model_siam` with the same meaning and defaults.
+        The magnetic field acts on the impurity only.
+
+    Returns
+    -------
+    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
+        The seven model_siam outputs, ready for :func:`~edrixs.solvers.get_ops`. One-body
+        matrices have shapes (20, 20) and (26, 26) and use complex spherical
+        harmonics. Basis metadata fixes initial valence occupancy to nd+10,
+        intermediate valence occupancy to nd+11, and core occupancy to five.
+        Coulomb tensors are dense unless sparse_U=True. No diagonalization
+        or spectrum calculation is performed.
+    """
+    slater_i, slater_n = slater
+    if v_soc is None:
+        v_soc = (0, 0)
+
+    # Center the orbital splittings before applying the CT-derived energies.
+    impurity_levels = np.asarray(impurity_levels) - np.mean(impurity_levels)
+    bath_levels = np.asarray(bath_levels) - np.mean(bath_levels)
+    U_dd_i = slater_i[0] - get_F0('d', *slater_i[1:3])
+    U_dd_n = slater_n[0] - get_F0('d', *slater_n[1:3])
+    U_dp = slater_n[3] - get_F0('dp', *slater_n[5:7])
+    E_d, E_L = CT_imp_bath(U_dd_i, Delta, nd)
+    E_dc, E_Lc, E_p = CT_imp_bath_core_hole(U_dd_n, U_dp, Delta, nd)
+
+    trans_c2n = tmat_c2r('d', True)
+    imp_mat = (np.diag(np.repeat(impurity_levels, 2) + E_d)
+               + cb_op(atom_hsoc('d', v_soc[0]), trans_c2n))
+    imp_mat_n = (np.diag(np.repeat(impurity_levels, 2) + E_dc)
+                 + cb_op(atom_hsoc('d', v_soc[1]), trans_c2n))
+    bath_offsets = np.repeat(bath_levels, 2)[None, :]
+    return model_siam(
+        ('d', 'p'), 1, siam_type=0, v_noccu=nd + 10,
+        c_level=-om_shift - 5 * E_p, c_soc=c_soc, trans_c2n=trans_c2n,
+        imp_mat=imp_mat, imp_mat_n=imp_mat_n,
+        bath_level=bath_offsets + E_L, bath_level_n=bath_offsets + E_Lc,
+        hyb=np.repeat(hyb, 2)[None, :], slater=(slater_i, slater_n),
+        ext_B=ext_B, on_which=on_which, loc_axis=loc_axis,
+        verbose=verbose, sparse_U=sparse_U, tol=tol,
+    )

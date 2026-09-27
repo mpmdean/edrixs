@@ -46,19 +46,16 @@ import matplotlib.pyplot as plt
 ################################################################################
 # Number of electrons
 # ------------------------------------------------------------------------------
-# When formulating problems of this type, one usually thinks of a nominal
-# valence for the impurity atom in this case :code:`nd = 8` and assume that the
-# bath is full. The solver that we will
-# use can simulate multiple bath sites. In our case we specify
-# :code:`nbath  = 1` sites. Electrons will be able to transition from O to Ni
-# during our calculation, but the total number of valence electrons
-# :code:`v_noccu` will be conserved.
+# We use a nominal Ni d8 impurity and a full bath of ten spin-orbitals.
+# The bath orbitals are ligand combinations with d-like symmetry, not a second
+# correlated atomic d shell. :func:`~edrixs.models.model_siam_2d1p` fixes one
+# such bath and a p core. It infers 18 initial valence electrons from nd=8.
+# Hybridization redistributes these electrons while conserving their total.
+# All model energies and hoppings below are in eV.
 nd = 8
+# Fixed model dimensions, also used by the following analysis examples.
 norb_d = 10
-norb_bath = 10
 nbath = 1
-v_noccu  = nd + nbath*norb_d
-shell_name = ('d', 'p') # valence and core shells for XAS calculation
 
 ################################################################################
 # Coulomb interactions
@@ -91,136 +88,57 @@ slater = ([F0_dd, F2_dd, F4_dd],  # initial
           [F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp])  # with core hole
 
 ################################################################################
-# Energy of the bath states
+# Charge-transfer energy
 # ------------------------------------------------------------------------------
-# The charge-transfer energy :math:`\Delta` is defined in the atomic limit
-# (without crystal field or hybridization) as the energy cost of transferring
-# one electron from the bath to the impurity:
-# :math:`\Delta = E(d^{n_d+1}\underline{L}) - E(d^{n_d})`.
-# For NiO we take the value from Ref. [1]_, obtained by fitting theory to
-# experiment.
+# Delta is the energy cost of transferring an electron from the ligand bath
+# to the impurity: :math:`\Delta = E(d^{n_d+1}\underline{L}) - E(d^{n_d})`.
+# This definition uses configuration-average energies without crystal field,
+# hybridization, or multipolar Coulomb interactions. It is not the bare
+# one-electron separation between the impurity and bath centers.
 Delta = 4.7
-################################################################################
-# Because moving electrons also changes the Coulomb energy, the single-particle
-# level splitting between impurity and bath is not simply :math:`\Delta`.
-# The site energies :math:`E_d` and :math:`E_L` must instead be found by
-# solving a pair of linear equations. We fix the overall energy scale by
-# setting :math:`E(d^{n_d} L^{10}) = 0` as the reference, which together with
-# the definition of :math:`\Delta` uniquely determines :math:`E_d` and
-# :math:`E_L`. The core shell is omitted for the ground-state calculation.
-E_d, E_L = edrixs.CT_imp_bath(U_dd, Delta, nd)
-################################################################################
-# For the intermediate (core-hole) state we use the same :math:`\Delta`,
-# which ensures the bath–impurity interaction is defined consistently with
-# the ground state. The core-hole Coulomb potential :math:`U_{dp}` shifts
-# all energies, so we now need two reference conditions: one for the
-# full-core state :math:`E(d^{n_d} L^{10} p^6) = 0` and one for the
-# core-hole state :math:`E(d^{n_d+1} L^{10} p^5) = 0`. These three
-# conditions uniquely determine :math:`E_{dc}`, :math:`E_{Lc}`, and the
-# core-level energy :math:`E_p`.
-E_dc, E_Lc, E_p = edrixs.CT_imp_bath_core_hole(U_dd, U_dp, Delta, nd)
-message = ("E_d = {:.3f} eV\n"
-           "E_L = {:.3f} eV\n"
-           "E_dc = {:.3f} eV\n"
-           "E_Lc = {:.3f} eV\n"
-           "E_p = {:.3f} eV\n")
-if __name__ == "__main__":
-    print(message.format(E_d, E_L, E_dc, E_Lc, E_p))
-
 
 ################################################################################
-# The spin-orbit coupling for the valence electrons in the ground state, the
-# valence electrons with the core hole present, and for the core hole itself
-# are initialized using the atomic values.
-zeta_d_i = info['v_soc_i'][0]
-zeta_d_n = info['v_soc_n'][0]
-c_soc = info['c_soc']
+# The wrapper recovers U_dd and U_dp from the Slater integrals and calls
+# :func:`~edrixs.utils.CT_imp_bath` and
+# :func:`~edrixs.utils.CT_imp_bath_core_hole` internally. These determine the
+# initial and intermediate shell centers using the same Delta. The initial
+# reference is :math:`E(d^{n_d}L^{10})=0`; the core-hole helper additionally
+# uses :math:`E(d^{n_d}L^{10}p^6)=0` and
+# :math:`E(d^{n_d+1}L^{10}p^5)=0` to determine the core energy.
 
 ################################################################################
-# Build matrices describing interactions
+# Orbital energies and hybridization
 # ------------------------------------------------------------------------------
-# edrixs uses complex spherical harmonics as its default basis set. If we want to
-# use another basis set, we need to pass a matrix to the solver, which transforms
-# from complex spherical harmonics into the basis we use.
-# The solver will use this matrix when implementing the Coulomb interactions
-# using the :code:`slater` list of Coulomb parameters.
-# Here it is easiest to
-# use real harmonics. We make the complex harmonics to real harmonics transformation
-# matrix via
-trans_c2n = edrixs.tmat_c2r('d',True)
-
-################################################################################
-# The crystal field and SOC needs to be passed to the solver by constructing
-# the impurity matrix in the real harmonic basis. For cubic symmetry, we need
-# to set the energies of the orbitals along the
-# diagonal of the matrix. These need to be in pairs as there are two
-# spin-orbitals for each orbital energy. Python
-# `list comprehension <https://realpython.com/list-comprehension-python/>`_
-# and
-# `NumPy indexing <https://numpy.org/doc/stable/user/basics.indexing.html>`_
-# are used here. See :ref:`sphx_glr_auto_examples_example_01_crystal_field.py`
-# for more details if needed.
+# Supply five real-harmonic orbital energies in the order
+# (dz2, dzx, dzy, dx2-y2, dxy). Each value applies to both spins.
+# The wrapper subtracts the mean of each set before adding its CT-derived
+# center. Thus Delta controls the shell alignment independently of any common
+# offset in these input energies. For cubic symmetry the two eg orbitals lie
+# at +0.6*10Dq and the three t2g orbitals at -0.4*10Dq.
 ten_dq = 0.56
-CF = np.zeros((norb_d, norb_d), dtype=complex)
-diagonal_indices = np.arange(norb_d)
-
-orbital_energies = np.array([e for orbital_energy in
-                             [+0.6 * ten_dq, # dz2
-                              -0.4 * ten_dq, # dzx
-                              -0.4 * ten_dq, # dzy
-                              +0.6 * ten_dq, # dx2-y2
-                              -0.4 * ten_dq] # dxy)
-                             for e in [orbital_energy]*2])
-
-
-CF[diagonal_indices, diagonal_indices] = orbital_energies
-
-################################################################################
-# The valence band SOC is constructed in the normal way and transformed into the
-# real harmonic basis.
-soc = edrixs.cb_op(edrixs.atom_hsoc('d', zeta_d_i), edrixs.tmat_c2r('d', True))
-
-################################################################################
-# The total impurity matrices for the ground and core-hole states are then
-# the sum of crystal field and spin-orbit coupling. We further needed to apply
-# an energy shift along the matrix diagonal, which we do using the
-# :code:`np.eye` function which creates a diagonal matrix of ones.
-E_d_mat = E_d*np.eye(norb_d)
-E_dc_mat = E_dc*np.eye(norb_d)
-imp_mat = CF + soc + E_d_mat
-imp_mat_n = CF + soc + E_dc_mat
-
-################################################################################
-# The energy level of the bath(s) is described by a matrix where the row index
-# denotes which bath and the column index denotes which orbital. Here we have
-# only one bath, with 10 spin-orbitals. We initialize every entry to the bath
-# energy :code:`E_L` and then split the levels according to :code:`ten_dq_bath`.
+impurity_levels = ten_dq * np.array([0.6, -0.4, -0.4, 0.6, -0.4])
 ten_dq_bath = 1.44
-bath_level = np.full((nbath, norb_d), E_L, dtype=complex)
-bath_level[0, :2] += ten_dq_bath*.6  # 3z2-r2
-bath_level[0, 2:6] -= ten_dq_bath*.4  # zx/yz
-bath_level[0, 6:8] += ten_dq_bath*.6  # x2-y2
-bath_level[0, 8:] -= ten_dq_bath*.4  # xy
-bath_level_n = np.full((nbath, norb_d), E_Lc, dtype=complex)
-bath_level_n[0, :2] += ten_dq_bath*.6  # 3z2-r2
-bath_level_n[0, 2:6] -= ten_dq_bath*.4  # zx/yz
-bath_level_n[0, 6:8] += ten_dq_bath*.6  # x2-y2
-bath_level_n[0, 8:] -= ten_dq_bath*.4  # xy
+bath_levels = ten_dq_bath * np.array([0.6, -0.4, -0.4, 0.6, -0.4])
 
 ################################################################################
-# The hybridization matrix describes the hopping between the bath
-# and the impurity. This is called either :math:`V` or :math:`T` in the
-# literature and matrix sign can either be positive or negative based.
-# This is the same shape as the bath matrix. We take our
-# values from Maurits Haverkort et al.'s DFT calculations [1]_.
+# Each hopping connects matching impurity and bath orbitals, with the same
+# amplitude for both spins and both states. We use the eg and t2g values
+# from Ref. [1]_. The wrapper handles spin duplication and basis conversion.
 Veg = 2.06
 Vt2g = 1.21
+hyb = [Veg, Vt2g, Vt2g, Veg, Vt2g]
 
-hyb = np.zeros((nbath, norb_d), dtype=complex)
-hyb[0, :2] = Veg  # 3z2-r2
-hyb[0, 2:6] = Vt2g  # zx/yz
-hyb[0, 6:8] = Veg  # x2-y2
-hyb[0, 8:] = Vt2g  # xy
+################################################################################
+# Spin-orbit coupling
+# ------------------------------------------------------------------------------
+# v_soc contains the initial and intermediate impurity SOC constants. We keep
+# the same impurity SOC in both states to preserve this example's original
+# parameterization. To use the separate atomic core-hole value instead, pass
+# v_soc=(zeta_d_i, zeta_d_n). The p-core SOC is supplied separately as c_soc.
+zeta_d_i = info['v_soc_i'][0]
+zeta_d_n = info['v_soc_n'][0]
+v_soc = (zeta_d_i, zeta_d_i)
+c_soc = info['c_soc']
 
 ################################################################################
 # We now need to define the parameters describing the XAS. X-ray polarization
@@ -237,23 +155,20 @@ phi = 0.0
 ################################################################################
 # these are with respect to the crystal field :math:`z` and :math:`x` axes
 # written above. (That is, unless you specify the :code:`loc_axis` parameter
-# described in the :code:`edrixs.model_siam` function documentation.)
+# described in the :code:`edrixs.model_siam_2d1p` function documentation.)
 
 ################################################################################
-# The spectrum in the raw calculation is offset by the energy involved with the
-# core hole state, which is roughly :math:`5 E_p`, so we offset the spectrum by
-# this and use :code:`om_shift` as an adjustable parameters for comparing
-# theory to experiment. We also use this to specify :code:`ominc_xas`
-# the range we want to compute the spectrum over. The core hole lifetime
-# broadening also needs to be set via :code:`gamma_c`.
+# om_shift aligns the calculated XAS with the experimental Ni L edge. The
+# wrapper combines this shift with its CT-derived core energy E_p through
+# c_level = -om_shift - 5*E_p. Increasing om_shift raises the transition
+# energies by the same amount. We center the photon-energy grid on this value.
 om_shift = 857.6
-c_level = -om_shift - 5*E_p
 ominc_xas = om_shift + np.linspace(-15, 25, 1000)
 
 ################################################################################
-# The final state broadening is specified in terms of half-width at half-maximum
+# The core-hole lifetime broadening is a half-width at half-maximum.
 # You can either pass a constant value or an array the same size as
-# :code:`om_shift` with varying values to simulate, for example, different state
+# :code:`ominc_xas` with varying values to simulate, for example, different state
 # lifetimes for higher energy states.
 gamma_c = np.full(ominc_xas.shape, 0.48/2)
 
@@ -274,23 +189,18 @@ on_which = 'spin'
 ################################################################################
 # Build the model
 # ------------------------------------------------------------------------------
-# The staged EDRIXS interface separates the physical model from its numerical
-# representation. :func:`~edrixs.models.model_siam` collects the one-body
-# matrices, Coulomb parameters and Fock-basis specifications for the impurity
-# plus bath problem. With :code:`siam_type=0` the model is assembled from
-# :code:`imp_mat`, :code:`bath_level` and :code:`hyb` (and their core-hole
-# counterparts). The
-# external magnetic field is applied via :code:`ext_B` acting
-# :code:`on_which='spin'`. The returned :code:`i` quantities describe the
-# initial and final states without a core hole, while the :code:`n` quantities
-# describe the intermediate state with a core hole. :code:`trans_mat` holds the
-# Cartesian dipole matrices.
-out = edrixs.model_siam(
-    shell_name, nbath, siam_type=0, v_noccu=v_noccu,
-    c_level=c_level, c_soc=c_soc, trans_c2n=trans_c2n,
-    imp_mat=imp_mat, imp_mat_n=imp_mat_n,
-    bath_level=bath_level, bath_level_n=bath_level_n, hyb=hyb,
-    slater=slater, ext_B=ext_B, on_which=on_which,
+# :func:`~edrixs.models.model_siam_2d1p` constructs the orbital-space model
+# from the parameters above. It builds the one-body matrices, Coulomb tensors,
+# and Fock-basis metadata; diagonalization remains a separate step. The returned
+# i quantities describe initial/final states without a core hole, while the n
+# quantities describe the intermediate state with a core hole. trans_mat holds
+# the Cartesian dipole matrices. General bath or hopping matrices can instead
+# be supplied through :func:`~edrixs.models.model_siam`.
+out = edrixs.model_siam_2d1p(
+    slater=slater, nd=nd, Delta=Delta,
+    impurity_levels=impurity_levels, bath_levels=bath_levels, hyb=hyb,
+    v_soc=v_soc, c_soc=c_soc, om_shift=om_shift,
+    ext_B=ext_B, on_which=on_which,
 )
 emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
 
