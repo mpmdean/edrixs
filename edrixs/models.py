@@ -792,7 +792,7 @@ def model_siam_2d1p(
         Initial ``[F0_dd, F2_dd, F4_dd]`` and intermediate
         ``[F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp]``.
         Each state's average Coulomb interactions are recovered by subtracting
-        the corresponding :func:`~edrixs.coulomb_utensor.get_F0` contribution from its F0 integrals.
+        the corresponding ``get_F0`` contribution from its F0 integrals.
     impurity_levels, bath_levels : array_like, shape (5,)
         Real orbital offsets in the order ``(dz2, dzx, dzy, dx2-y2, dxy)``.
         The mean of each five-orbital array is subtracted before adding the
