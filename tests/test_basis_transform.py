@@ -222,4 +222,3 @@ def test_transform_utensor_nonidentity_matches_einsum_oracle():
     expected = np.einsum('ai,bj,abcd,ck,dl->ijkl',
                          T.conj(), T.conj(), umat, T, T)
     assert np.allclose(transform_utensor(umat, T), expected)
-
