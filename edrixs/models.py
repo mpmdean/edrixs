@@ -574,24 +574,156 @@ def model_siam(
     on_which='spin', loc_axis=None, verbose=False, sparse_U=False, tol=1E-10
 ):
     """
-    Set up orbital-space data and Fock-basis metadata for a SIAM problem.
+    Set up a single-impurity Anderson model (SIAM) for ED, XAS, and RIXS.
 
-    This is the backend-neutral setup analogue of ed_siam_fort. It does not
-    search over occupancies, does not build many-body Hamiltonians, and does not
-    diagonalize anything. The occupancy is the supplied v_noccu. If
-    sparse_U=True, the impurity+core Coulomb tensor is embedded directly into
-    the full SIAM orbital space as a sparse flattened matrix.
+    Construct backend-independent one-body matrices, Coulomb interactions,
+    Fock-basis specifications, and core-to-impurity transition matrices. This
+    is the setup analogue of :func:`~edrixs.solvers.ed_siam_fort` at fixed
+    ``v_noccu``; it does not search over occupancies, build many-body
+    Hamiltonians, or diagonalize them. Pass the returned tuple to
+    :func:`~edrixs.solvers.get_ops` to construct the many-body operators.
+
+    All energies, Slater integrals, hybridizations, spin-orbit coupling
+    constants, and magnetic-field components are in eV. Let ``v_norb`` and
+    ``c_norb`` be the numbers of impurity and core spin-orbitals, respectively,
+    ``ntot_v = (nbath + 1) * v_norb``, and ``ntot = ntot_v + c_norb``.
+    Orbitals are ordered as impurity, successive bath sites, then core.
+    Each bath site has ``v_norb`` spin-orbitals and no Coulomb interaction.
 
     Parameters
     ----------
+    shell_name : tuple of two str
+        Impurity valence and core shell names, in that order. The valence
+        shell can be 's', 'p', 't2g', 'd', or 'f'. The core shell can be
+        's', 'p', 'p12', 'p32', 't2g', 'd', 'd32', 'd52', 'f', 'f52', or
+        'f72'. For example, ``('d', 'p32')`` describes an L3-edge transition
+        from a p3/2 core shell to a d impurity.
+    nbath : int
+        Number of bath sites.
+    siam_type : {0, 1}, optional
+        Parameterization of the impurity and bath one-body terms. For 0
+        (default), use ``imp_mat``, ``bath_level``, and ``hyb`` to describe
+        diagonal hybridization. For 1, use the full ``hopping`` matrix,
+        allowing off-diagonal hybridization. The corresponding ``*_n``
+        parameters specify intermediate-state terms. Parameters belonging
+        to the other parameterization are ignored.
+    v_noccu : int, optional
+        Total number of electrons in the impurity and bath orbitals in the
+        initial state, excluding the filled core. Default is 1. Must satisfy
+        ``1 <= v_noccu < ntot_v`` so that the core-energy shift is defined
+        and the intermediate state can accommodate one additional electron.
+    static_core_pot : float, optional
+        Static core-hole potential, subtracted from every impurity diagonal
+        element in the intermediate state. Positive values are attractive.
+        This is added independently of the core-valence Slater interactions.
+        Default is 0.
+    c_level : float, optional
+        Core-shell energy level. In the initial state, the omitted filled
+        core is accounted for by adding ``c_level * c_norb / v_noccu`` to
+        every impurity and bath diagonal element. In the intermediate state,
+        ``c_level`` is added to each core diagonal element. Default is 0.
+    c_soc : float, optional
+        Core spin-orbit coupling strength, applied for unsplit 'p', 'd', and
+        'f' core shells only. For split shells such as 'p32', the shell
+        choice already selects the total-angular-momentum subspace.
+        Default is 0.
+    trans_c2n : array_like of complex, shape (v_norb, v_norb), optional
+        Unitary transformation from complex spherical harmonics to the
+        basis used for the impurity and bath one-body input parameters.
+        Its columns are the input basis vectors expressed in spherical
+        harmonics. The same transformation is used on the impurity and
+        every bath site to convert the one-body matrices back to spherical
+        harmonics. Default is the identity.
+    imp_mat : array_like of complex, shape (v_norb, v_norb), optional
+        Initial-state impurity one-body matrix for ``siam_type=0``, including
+        the impurity energy level, crystal field, and valence spin-orbit
+        coupling as needed. Default is zero.
+    imp_mat_n : array_like of complex, shape (v_norb, v_norb), optional
+        Intermediate-state impurity matrix for ``siam_type=0``. If None,
+        use ``imp_mat``.
+    bath_level : numpy.ndarray, shape (nbath, v_norb), optional
+        Initial-state bath energy levels for ``siam_type=0``. The first
+        index selects the bath site and the second its spin-orbital.
+        Default is zero.
+    bath_level_n : numpy.ndarray, shape (nbath, v_norb), optional
+        Intermediate-state bath levels for ``siam_type=0``. If None, use
+        ``bath_level``.
+    hyb : numpy.ndarray, shape (nbath, v_norb), optional
+        Initial-state hybridization amplitudes for ``siam_type=0``.
+        ``hyb[i, j]`` is the matrix element from spin-orbital ``j`` of bath
+        site ``i`` to impurity spin-orbital ``j``; its complex conjugate is
+        inserted for the reverse hopping. Default is zero.
+    hyb_n : numpy.ndarray, shape (nbath, v_norb), optional
+        Intermediate-state hybridization amplitudes for ``siam_type=0``.
+        If None, use ``hyb``.
+    hopping : array_like of complex, shape (ntot_v, ntot_v), optional
+        Full initial-state one-body matrix for ``siam_type=1``, including
+        impurity terms, bath levels, and hybridization. Supply a Hermitian
+        matrix in impurity-then-bath order. Default is zero.
+    hopping_n : array_like of complex, shape (ntot_v, ntot_v), optional
+        Full intermediate-state impurity and bath matrix for ``siam_type=1``.
+        If None, use ``hopping``.
+    slater : tuple of two lists, optional
+        Slater integrals for the initial and intermediate states, respectively.
+        Each list is ordered as ``[FX_vv, FX_vc, GX_vc, FX_cc]``, with ranks
+        X in ascending order within each group; v denotes the impurity and
+        c the core. Use ``slater_integrals_name(shell_name, ('v', 'c'))``
+        to obtain the names in the required order. Trailing zeros may be
+        omitted; entries beyond the required number are ignored. For
+        example, d-impurity/p-core integrals begin with
+        ``[F0_dd, F2_dd, F4_dd, F0_dp, F2_dp, G1_dp, G3_dp]``.
+        Initial-state terms involving the core are ineffective because the
+        initial basis omits the filled core. Default is all zeros.
+    ext_B : array_like of float, shape (3,), optional
+        External Zeeman/exchange field components along the global x, y,
+        and z axes, applied only to the impurity in both states. Components
+        are energy coefficients, not magnetic fields in tesla. Default is
+        zero.
+    on_which : {'spin', 'orbital', 'both'}, optional
+        Couple ``ext_B`` to ``2S``, ``L``, or ``L + 2S``, respectively,
+        with a positive sign in the Hamiltonian. Default is 'spin'.
+    loc_axis : array_like of float, shape (3, 3), optional
+        Rotation from local crystal-field coordinates to the global frame
+        for the transition operators. Columns are the local axes expressed
+        in global coordinates. Default is the identity rotation.
     verbose : bool, optional
-        If True, print a setup summary (Slater integrals and Hilbert-space
-        dimensions). Default False.
+        If True, print Slater integrals and Hilbert-space dimensions.
+        Default is False.
+    sparse_U : bool, optional
+        If False (default), return dense rank-4 Coulomb tensors. If True,
+        embed the impurity/core interactions directly as CSR matrices,
+        avoiding dense rank-4 tensors over the full impurity and bath space.
+        The flattened convention is ``row = lorb * norb + korb`` and
+        ``col = jorb * norb + iorb``, where ``norb`` is ``ntot_v`` for the
+        initial state and ``ntot`` for the intermediate state.
+    tol : float, optional
+        Keep Coulomb entries with absolute value greater than this threshold
+        when ``sparse_U=True``. Unused for dense tensors. Default is ``1e-10``.
 
     Returns
     -------
-    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
-        These can be passed directly to ``get_ops`` with the SciPy or dense backend.
+    emat_i : numpy.ndarray, shape (ntot_v, ntot_v)
+        Initial-state one-body matrix over impurity and bath orbitals.
+    umat_i : numpy.ndarray or scipy.sparse.csr_matrix
+        Initial-state Coulomb interaction, nonzero only on the impurity.
+        Dense shape is ``(ntot_v,) * 4``; sparse shape is
+        ``(ntot_v**2, ntot_v**2)``.
+    basis_i : FockBasisSpec
+        Initial-state basis specification with ``v_noccu`` electrons in
+        the impurity and bath orbitals. The filled core is implicit.
+    emat_n : numpy.ndarray, shape (ntot, ntot)
+        Intermediate-state one-body matrix over impurity, bath, and core.
+    umat_n : numpy.ndarray or scipy.sparse.csr_matrix
+        Intermediate-state Coulomb interaction on impurity and core orbitals.
+        Dense shape is ``(ntot,) * 4``; sparse shape is
+        ``(ntot**2, ntot**2)``.
+    basis_n : FockBasisSpec
+        Intermediate-state basis specification with ``v_noccu + 1`` impurity
+        and bath electrons and ``c_norb - 1`` core electrons.
+    trans_mat : numpy.ndarray, shape (npol, ntot, ntot)
+        Core-to-impurity absorption matrices, with nonzero entries only in
+        the impurity-row/core-column block. ``npol`` is 3 for dipole and 5
+        for quadrupole transitions; components are in the global frame.
     """
     if verbose:
         print("edrixs >>> Setting up SIAM problem ...")
