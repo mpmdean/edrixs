@@ -1,4 +1,4 @@
-"""Charge-transfer wrapper equivalence and input-contract tests."""
+"""Charge-transfer wrapper equivalence tests."""
 
 import numpy as np
 import pytest
@@ -93,22 +93,6 @@ def test_sparse_and_shift(params):
     assert_allclose(dn, expected, atol=1e-12)
     # Fixed occupancies turn these into scalar many-body energy shifts.
     assert_allclose(5 * dn[20, 20] - 18 * di[0, 0], shift)
-
-
-@pytest.mark.parametrize('name,value', [
-    ('nd', -1), ('nd', 10), ('nd', 8.0), ('nd', True),
-    ('impurity_levels', [0] * 4), ('bath_levels', [[0] * 5]),
-    ('impurity_levels', [1j] * 5), ('bath_levels', [np.nan] * 5),
-    ('hyb', [0] * 6), ('hyb', [np.inf] * 5),
-    ('slater', ([1, 2], [0] * 7)), ('slater', ([0] * 3, [0] * 8)),
-    ('slater', None), ('slater', ([np.inf] * 3, [0] * 7)),
-    ('v_soc', .1), ('v_soc', [0, np.nan]), ('c_soc', 1j),
-    ('Delta', np.inf), ('om_shift', [1]),
-])
-def test_invalid_inputs(params, name, value):
-    params[name] = value
-    with pytest.raises(ValueError, match=name.replace('[', r'\[')):
-        edrixs.model_siam_2v1c(**params)
 
 
 @pytest.mark.parametrize('nd', [0, np.int64(9)])

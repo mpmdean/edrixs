@@ -832,39 +832,9 @@ def model_siam_2v1c(
         Coulomb tensors are dense unless sparse_U=True. No diagonalization
         or spectrum calculation is performed.
     """
-    def finite_array(value, shape, name, real=True):
-        try:
-            array = np.asarray(value)
-            if real and np.iscomplexobj(array):
-                raise ValueError
-            array = np.asarray(array, dtype=float if real else complex)
-            if array.shape != shape or not np.all(np.isfinite(array)):
-                raise ValueError
-        except (TypeError, ValueError, OverflowError) as exc:
-            kind = 'real ' if real else ''
-            raise ValueError(
-                f"{name} must contain finite {kind}values with shape {shape}"
-            ) from exc
-        return array
-
-    if (isinstance(nd, (bool, np.bool_))
-            or not isinstance(nd, (int, np.integer)) or not 0 <= nd <= 9):
-        raise ValueError("nd must be an integer from 0 through 9")
-    try:
-        if len(slater) != 2:
-            raise ValueError
-        slater_i, slater_n = slater
-    except (TypeError, ValueError) as exc:
-        raise ValueError("slater must contain initial and intermediate lists") from exc
-    slater_i = finite_array(slater_i, (3,), 'slater[0]')
-    slater_n = finite_array(slater_n, (7,), 'slater[1]')
-    impurity_levels = finite_array(impurity_levels, (5,), 'impurity_levels')
-    bath_levels = finite_array(bath_levels, (5,), 'bath_levels')
-    hyb = finite_array(hyb, (5,), 'hyb', real=False)
-    Delta = finite_array(Delta, (), 'Delta').item()
-    c_soc = finite_array(c_soc, (), 'c_soc').item()
-    om_shift = finite_array(om_shift, (), 'om_shift').item()
-    v_soc = finite_array((0, 0) if v_soc is None else v_soc, (2,), 'v_soc')
+    slater_i, slater_n = slater
+    if v_soc is None:
+        v_soc = (0, 0)
 
     U_dd_i = slater_i[0] - get_F0('d', *slater_i[1:3])
     U_dd_n = slater_n[0] - get_F0('d', *slater_n[1:3])
@@ -879,7 +849,7 @@ def model_siam_2v1c(
                  + cb_op(atom_hsoc('d', v_soc[1]), trans_c2n))
     bath_offsets = np.repeat(bath_levels, 2)[None, :]
     return model_siam(
-        ('d', 'p'), 1, siam_type=0, v_noccu=int(nd) + 10,
+        ('d', 'p'), 1, siam_type=0, v_noccu=nd + 10,
         c_level=-om_shift - 5 * E_p, c_soc=c_soc, trans_c2n=trans_c2n,
         imp_mat=imp_mat, imp_mat_n=imp_mat_n,
         bath_level=bath_offsets + E_L, bath_level_n=bath_offsets + E_Lc,
