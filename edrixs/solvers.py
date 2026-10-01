@@ -26,7 +26,7 @@ from .photon_transition import (
 from .coulomb_utensor import get_umat_slater
 from .manybody_operator import two_fermion, four_fermion
 from .fock_basis import (
-    build_fock_basis, get_fock_bin_by_N
+    build_fock_basis, get_fock_bin_by_N, write_fock_dec_by_N
 )
 from .basis_transform import cb_op2, tmat_r2c, cb_op
 from .utils import info_atomic_shell, slater_integrals_name, boltz_dist
@@ -1100,10 +1100,7 @@ def ed_1v1c_fort(comm, shell_name, *, shell_level=None,
 
     The hopping and Coulomb terms of both the initial and intermediate Hamiltonians will be
     constructed and written to files (hopping_i.in, hopping_n.in, coulomb_i.in and coulomb_n.in).
-    The initial core shell is fully occupied, including core-valence and
-    core-core interactions. Before writing native files, its contribution is
-    contracted into the valence Hamiltonian. The native initial basis
-    (fock_i.in) and returned density matrices contain valence orbitals only.
+    Fock basis for the initial Hamiltonian will be written to file (fock_i.in).
 
     ED will be only performed on the initial Hamiltonian to find a few lowest eigenstates
     do_ed=True. Only input files will be written if do_ed=False.
@@ -1482,10 +1479,7 @@ def ed_2v1c_fort(comm, shell_name, *, shell_level=None,
 
     The hopping and Coulomb terms of both the initial and intermediate Hamiltonians will be
     constructed and written to files (hopping_i.in, hopping_n.in, coulomb_i.in and coulomb_n.in).
-    The initial core shell is fully occupied, including core-valence and
-    core-core interactions. Before writing native files, its contribution is
-    contracted into the valence Hamiltonian. The native initial basis
-    (fock_i.in) and returned density matrices contain valence orbitals only.
+    Fock basis for the initial Hamiltonian will be written to file (fock_i.in).
 
     ED will be only performed on the initial Hamiltonian to find a few lowest eigenstates
     do_ed=True. Only input files will be written if do_ed=False.
@@ -1899,16 +1893,9 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
                  slater=None, ext_B=None, on_which='spin', do_ed=0, ed_solver=2, neval=1,
                  nvector=1, ncv=3, idump=False, maxiter=1000, eigval_tol=1e-8, min_ndim=1000):
     """
-    Find the ground state of the initial Hamiltonian of a Single Impurity Anderson Model (SIAM),
+    Find the ground state of the initial Hamiltonian of a Single Impuirty Anderson Model (SIAM),
     and also prepare input files, *hopping_i.in*, *hopping_n.in*, *coulomb_i.in*, *coulomb_n.in*
     for following XAS and RIXS calculations.
-
-    The initial core is fully occupied; its core-valence potential and core
-    energy are contracted into the native valence-only files. Occupancy
-    searches compare sectors without the common core constant, then restore
-    it in reported energies and final staging. Returned density matrices
-    contain valence orbitals only. A zero-valence sector with nonzero core
-    energy cannot be represented by the native files.
 
     Parameters
     ----------
@@ -2111,6 +2098,7 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
                     umat_i[indx[i], indx[j], indx[k], indx[m]] = umat_tmp_i[i, j, k, m]
                     umat_n[indx[i], indx[j], indx[k], indx[m]] = umat_tmp_n[i, j, k, m]
     if rank == 0:
+        write_umat(umat_i, 'coulomb_i.in')
         write_umat(umat_n, 'coulomb_n.in')
 
     emat_i = np.zeros((ntot, ntot), dtype=complex)
@@ -2170,7 +2158,6 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
         raise Exception("Unknown siam_type: ", siam_type)
 
     if c_name in ['p', 'd', 'f']:
-        emat_i[ntot_v:ntot, ntot_v:ntot] += atom_hsoc(c_name, c_soc)
         emat_n[ntot_v:ntot, ntot_v:ntot] += atom_hsoc(c_name, c_soc)
 
     # static core potential
@@ -2209,21 +2196,19 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
         emat_i[0:v_norb, 0:v_norb] += zeeman
         emat_n[0:v_norb, 0:v_norb] += zeeman
 
-    emat_i[ntot_v:ntot, ntot_v:ntot] += np.eye(c_norb) * c_level
-    emat_n[ntot_v:ntot, ntot_v:ntot] += np.eye(c_norb) * c_level
-
     # Perform ED if necessary
     if do_ed == 1 or do_ed == 2:
+        eval_shift = c_level * c_norb / v_noccu
+        emat_i[0:ntot_v, 0:ntot_v] += np.eye(ntot_v) * eval_shift
+        emat_n[ntot_v:ntot, ntot_v:ntot] += np.eye(c_norb) * c_level
         if rank == 0:
-            fortran_backend._write_initial_integrals(
-                emat_i, umat_i, ntot_v, v_noccu)
+            write_emat(emat_i, 'hopping_i.in')
             write_emat(emat_n, 'hopping_n.in')
             write_config(
-                ed_solver=ed_solver, num_val_orbs=ntot_v, num_core_orbs=c_norb,
-                neval=neval, nvector=nvector, ncv=ncv,
+                ed_solver=ed_solver, num_val_orbs=ntot_v, neval=neval, nvector=nvector, ncv=ncv,
                 idump=idump, maxiter=maxiter, min_ndim=min_ndim, eigval_tol=eigval_tol
             )
-            fortran_backend._write_fock_sector(ntot_v, v_noccu, c_norb, "fock_i.in")
+            write_fock_dec_by_N(ntot_v, v_noccu, "fock_i.in")
         if do_ed == 1:
             if rank == 0:
                 print("edrixs >>> do_ed=1, perform ED at noccu: ", v_noccu, flush=True)
@@ -2244,13 +2229,10 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
 
     # Find the ground states by total occupancy N
     elif do_ed == 0:
-        core_energy = None
         if rank == 0:
-            print("edrixs >>> do_ed=0, search ground state by total occupancy N", flush=True)
+            print("edrixs >>> do_ed=0, serach ground state by total occupancy N", flush=True)
             flog = open('search_gs.log', 'w')
-            core_energy = fortran_backend._write_initial_integrals(
-                emat_i, umat_i, ntot_v, 0, include_core_energy=False)
-        core_energy = float(np.real(comm.bcast(core_energy, root=0)))
+        write_emat(emat_i, 'hopping_i.in')
         res = []
         num_electron = ntot_v // 2
         noccu_gs = num_electron
@@ -2259,7 +2241,7 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
                 ed_solver=1, num_val_orbs=ntot_v, neval=1, nvector=1, idump=False,
                 maxiter=maxiter, min_ndim=min_ndim, eigval_tol=eigval_tol
             )
-            fortran_backend._write_fock_sector(ntot_v, num_electron, c_norb, "fock_i.in")
+            write_fock_dec_by_N(ntot_v, num_electron, "fock_i.in")
         comm.Barrier()
         ed_fsolver(fcomm, rank, size)
         comm.Barrier()
@@ -2269,9 +2251,9 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
         tmp = (1, ntot_v, ntot_v)
         denmat = data[:, 3].reshape(tmp) + 1j * data[:, 4].reshape(tmp)
         imp_occu = np.sum(denmat[0].diagonal()[0:v_norb]).real
-        res.append((num_electron, eval_gs + core_energy, imp_occu))
+        res.append((num_electron, eval_gs, imp_occu))
         if rank == 0:
-            print(num_electron, eval_gs + core_energy, imp_occu, file=flog, flush=True)
+            print(num_electron, eval_gs, imp_occu, file=flog, flush=True)
 
         nplus_list = [num_electron + i + 1 for i in range(ntot_v // 2)]
         nminus_list = [num_electron - i - 1 for i in range(ntot_v // 2)]
@@ -2281,7 +2263,7 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
             if nplus_direction:
                 num_electron = nplus_list[i]
                 if rank == 0:
-                    fortran_backend._write_fock_sector(ntot_v, num_electron, c_norb, "fock_i.in")
+                    write_fock_dec_by_N(ntot_v, num_electron, "fock_i.in")
                 comm.Barrier()
                 ed_fsolver(fcomm, rank, size)
                 comm.Barrier()
@@ -2297,14 +2279,14 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
                 tmp = (1, ntot_v, ntot_v)
                 denmat = data[:, 3].reshape(tmp) + 1j * data[:, 4].reshape(tmp)
                 imp_occu = np.sum(denmat[0].diagonal()[0:v_norb]).real
-                res.append((num_electron, eigval + core_energy, imp_occu))
+                res.append((num_electron, eigval, imp_occu))
                 if rank == 0:
-                    print(num_electron, eigval + core_energy, imp_occu, file=flog, flush=True)
+                    print(num_electron, eigval, imp_occu, file=flog, flush=True)
 
             if nminus_direction:
                 num_electron = nminus_list[i]
                 if rank == 0:
-                    fortran_backend._write_fock_sector(ntot_v, num_electron, c_norb, "fock_i.in")
+                    write_fock_dec_by_N(ntot_v, num_electron, "fock_i.in")
                 comm.Barrier()
                 ed_fsolver(fcomm, rank, size)
                 comm.Barrier()
@@ -2320,9 +2302,9 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
                 tmp = (1, ntot_v, ntot_v)
                 denmat = data[:, 3].reshape(tmp) + 1j * data[:, 4].reshape(tmp)
                 imp_occu = np.sum(denmat[0].diagonal()[0:v_norb]).real
-                res.append((num_electron, eigval + core_energy, imp_occu))
+                res.append((num_electron, eigval, imp_occu))
                 if rank == 0:
-                    print(num_electron, eigval + core_energy, imp_occu, file=flog, flush=True)
+                    print(num_electron, eigval, imp_occu, file=flog, flush=True)
         if rank == 0:
             flog.close()
             res.sort(key=lambda x: x[1])
@@ -2333,16 +2315,17 @@ def ed_siam_fort(comm, shell_name, nbath, *, siam_type=0, v_noccu=1, static_core
             print("edrixs >>> do_ed=0, Perform ED at occupancy: ", noccu_gs,
                   "with more accuracy", flush=True)
         # Do ED for the occupancy of ground state with more accuracy
+        eval_shift = c_level * c_norb / noccu_gs
+        emat_i[0:ntot_v, 0:ntot_v] += np.eye(ntot_v) * eval_shift
+        emat_n[ntot_v:ntot, ntot_v:ntot] += np.eye(c_norb) * c_level
         if rank == 0:
-            fortran_backend._write_initial_integrals(
-                emat_i, umat_i, ntot_v, noccu_gs)
+            write_emat(emat_i, 'hopping_i.in')
             write_emat(emat_n, 'hopping_n.in')
             write_config(
-                ed_solver=ed_solver, num_val_orbs=ntot_v, num_core_orbs=c_norb,
-                neval=neval, nvector=nvector, ncv=ncv,
+                ed_solver=ed_solver, num_val_orbs=ntot_v, neval=neval, nvector=nvector, ncv=ncv,
                 idump=idump, maxiter=maxiter, min_ndim=min_ndim, eigval_tol=eigval_tol
             )
-            fortran_backend._write_fock_sector(ntot_v, noccu_gs, c_norb, "fock_i.in")
+            write_fock_dec_by_N(ntot_v, noccu_gs, "fock_i.in")
         comm.Barrier()
         ed_fsolver(fcomm, rank, size)
         comm.Barrier()
@@ -2483,8 +2466,8 @@ def xas_siam_fort(comm, shell_name, nbath, ominc, *, gamma_c=0.1,
         print("edrixs >>> Running XAS ...", flush=True)
         write_config(num_val_orbs=ntot_v, num_core_orbs=c_norb,
                      num_gs=num_gs, nkryl=nkryl)
-        fortran_backend._write_fock_sector(ntot_v, v_noccu, c_norb, "fock_i.in")
-        fortran_backend._write_fock_sector(ntot_v, v_noccu + 1, c_norb, "fock_n.in", core_hole=True)
+        write_fock_dec_by_N(ntot_v, v_noccu, "fock_i.in")
+        write_fock_dec_by_N(ntot_v, v_noccu + 1, "fock_n.in")
 
     case = v_name + c_name
     tmp = get_trans_oper(case)
@@ -2703,9 +2686,9 @@ def rixs_siam_fort(comm, shell_name, nbath, ominc, eloss, *, gamma_c=0.1, gamma_
 
     if rank == 0:
         print("edrixs >>> Running RIXS ...", flush=True)
-        fortran_backend._write_fock_sector(ntot_v, v_noccu, c_norb, "fock_i.in")
-        fortran_backend._write_fock_sector(ntot_v, v_noccu + 1, c_norb, "fock_n.in", core_hole=True)
-        fortran_backend._write_fock_sector(ntot_v, v_noccu, c_norb, "fock_f.in")
+        write_fock_dec_by_N(ntot_v, v_noccu, "fock_i.in")
+        write_fock_dec_by_N(ntot_v, v_noccu + 1, "fock_n.in")
+        write_fock_dec_by_N(ntot_v, v_noccu, "fock_f.in")
 
         case = v_name + c_name
         tmp = get_trans_oper(case)

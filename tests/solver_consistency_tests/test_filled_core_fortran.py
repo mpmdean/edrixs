@@ -1,4 +1,4 @@
-"""Modern and legacy native workflows with active initial core interactions."""
+"""Modern filled-core and historical legacy Fortran workflows."""
 
 import importlib.util
 from pathlib import Path
@@ -35,11 +35,19 @@ def _case(kind):
 
 
 @pytest.mark.parametrize('kind', ['1v1c', '2v1c', 'siam'])
-def test_modern_legacy_and_dense_ed_xas_rixs(kind, tmp_path, monkeypatch):
+@pytest.mark.parametrize('route', ['modern', 'legacy'])
+def test_fortran_ed_xas_rixs_matches_its_core_convention(kind, route, tmp_path, monkeypatch):
     from mpi4py import MPI
     monkeypatch.chdir(tmp_path)
     kwargs = _case(kind)
-    problem = getattr(edrixs, 'model_' + kind)(**kwargs)
+    problem = list(getattr(edrixs, 'model_' + kind)(**kwargs))
+    nv, nocc = problem[2].shapes[0]
+    if route == 'legacy':
+        # Historical native initial states omit core interactions. Retaining
+        # the filled core's one-body energy gives the same legacy reference.
+        valence_u = problem[1][:nv, :nv, :nv, :nv].copy()
+        problem[1] = np.zeros_like(problem[1])
+        problem[1][:nv, :nv, :nv, :nv] = valence_u
     dense_i, dense_n, dense_t = edrixs.get_ops(*problem, backend='dense')
     exact_e, exact_v = np.linalg.eigh(dense_i)
     center = np.median(np.linalg.eigvalsh(dense_n)) - exact_e[0]
@@ -52,71 +60,80 @@ def test_modern_legacy_and_dense_ed_xas_rixs(kind, tmp_path, monkeypatch):
                          backend='dense', **xargs)
     exact_r = edrixs.rixs(exact_e[:1], exact_v[:, :1], dense_i, dense_n, dense_t,
                          ominc, loss, backend='dense', **rargs)
-    hi, hn, trans = edrixs.get_ops(*problem, backend='fortran')
-    modern_e, vectors = edrixs.ed(hi, num_evals=1,
-                                 backend_kws={'ed_solver': 0, 'nvector': 1})
-    modern_x = edrixs.xas(modern_e, vectors, hn, trans, ominc,
-                          backend_kws={'nkryl': len(dense_n)}, **xargs)
-    modern_r = edrixs.rixs(modern_e, vectors, hi, hn, trans, ominc, loss,
-                           backend_kws={'nkryl': len(dense_n), 'linsys_tol': 1e-12},
-                           **rargs)
-    staged = {name: Path(name).read_bytes() for name in (
-        'hopping_i.in', 'hopping_n.in', 'coulomb_i.in', 'coulomb_n.in',
-        'fock_i.in', 'fock_n.in', 'fock_f.in')}
-    legacy_ed = getattr(edrixs, 'ed_' + kind + '_fort')
-    # File-only mode must stage the same reduced problem as modern get_ops.
-    result = legacy_ed(MPI.COMM_WORLD, **kwargs, do_ed=2 if kind == 'siam' else False)
-    assert all(item is None for item in result)
-    for name in ('hopping_i.in', 'hopping_n.in', 'coulomb_i.in', 'coulomb_n.in', 'fock_i.in'):
-        assert Path(name).read_bytes() == staged[name]
-    legacy = legacy_ed(MPI.COMM_WORLD, **kwargs, ed_solver=0, neval=1,
-                       nvector=1, idump=True, do_ed=1)
-    legacy_e, denmat = legacy[:2]
-    nv = problem[2].shapes[0][0]
-    assert denmat.shape == (1, nv, nv)
-    assert_allclose(np.trace(denmat[0]), 1, atol=1e-12)
-    spectrum_args = dict(shell_name=kwargs['shell_name'])
-    if kind == 'siam':
-        spectrum_args['nbath'] = 1
-    legacy_x, _ = getattr(edrixs, 'xas_' + kind + '_fort')(
-        MPI.COMM_WORLD, ominc=ominc, nkryl=len(dense_n), **spectrum_args, **xargs)
-    legacy_r, _ = getattr(edrixs, 'rixs_' + kind + '_fort')(
-        MPI.COMM_WORLD, ominc=ominc, eloss=loss, nkryl=len(dense_n),
-        linsys_tol=1e-12, **spectrum_args, **rargs)
-    for name in ('fock_i.in', 'fock_n.in', 'fock_f.in'):
-        assert Path(name).read_bytes() == staged[name]
-    for energies in (modern_e, legacy_e):
-        assert_allclose(energies, exact_e[:1], atol=2e-9)
-    for spectrum in (modern_x, legacy_x):
-        assert_allclose(spectrum, exact_x, rtol=2e-7, atol=2e-9)
-    for spectrum in (modern_r, legacy_r):
-        assert_allclose(spectrum, exact_r, rtol=2e-6, atol=2e-8)
+    if route == 'modern':
+        hi, hn, trans = edrixs.get_ops(*problem, backend='fortran')
+        energies, vectors = edrixs.ed(hi, num_evals=1,
+                                     backend_kws={'ed_solver': 0, 'nvector': 1})
+        absorption = edrixs.xas(energies, vectors, hn, trans, ominc,
+                                backend_kws={'nkryl': len(dense_n)}, **xargs)
+        scattering = edrixs.rixs(
+            energies, vectors, hi, hn, trans, ominc, loss,
+            backend_kws={'nkryl': len(dense_n), 'linsys_tol': 1e-12}, **rargs)
+    else:
+        legacy_ed = getattr(edrixs, 'ed_' + kind + '_fort')
+        result = legacy_ed(MPI.COMM_WORLD, **kwargs, do_ed=2 if kind == 'siam' else False)
+        assert all(item is None for item in result)
+        # Native legacy files retain the full uncontracted Coulomb input and
+        # redistribute only the filled core's one-body energy over valence.
+        original = getattr(edrixs, 'model_' + kind)(**kwargs)
+        expected_h = np.zeros_like(original[0])
+        expected_h[:nv, :nv] = original[0][:nv, :nv]
+        expected_h[:nv, :nv] += np.eye(nv) * np.trace(original[0][nv:, nv:]) / nocc
+        edrixs.write_emat(expected_h, 'expected_h.in')
+        edrixs.write_umat(original[1], 'expected_u.in')
+        for actual, expected in [('hopping_i.in', 'expected_h.in'),
+                                 ('coulomb_i.in', 'expected_u.in')]:
+            assert_allclose(np.loadtxt(actual, skiprows=1),
+                            np.loadtxt(expected, skiprows=1), atol=1e-13)
+        staged = {name: Path(name).read_bytes() for name in (
+            'hopping_i.in', 'hopping_n.in', 'coulomb_i.in', 'coulomb_n.in', 'fock_i.in')}
+        legacy = legacy_ed(MPI.COMM_WORLD, **kwargs, ed_solver=0, neval=1,
+                           nvector=1, idump=True, do_ed=1)
+        for name, contents in staged.items():
+            assert Path(name).read_bytes() == contents
+        energies, denmat = legacy[:2]
+        assert denmat.shape == (1, nv, nv)
+        assert_allclose(np.trace(denmat[0]), nocc, atol=1e-12)
+        spectrum_args = dict(shell_name=kwargs['shell_name'])
+        if kind == 'siam':
+            spectrum_args['nbath'] = 1
+        absorption, _ = getattr(edrixs, 'xas_' + kind + '_fort')(
+            MPI.COMM_WORLD, ominc=ominc, nkryl=len(dense_n), **spectrum_args, **xargs)
+        scattering, _ = getattr(edrixs, 'rixs_' + kind + '_fort')(
+            MPI.COMM_WORLD, ominc=ominc, eloss=loss, nkryl=len(dense_n),
+            linsys_tol=1e-12, **spectrum_args, **rargs)
+        assert Path('fock_f.in').read_bytes() == staged['fock_i.in']
+    assert_allclose(energies, exact_e[:1], atol=2e-9)
+    assert_allclose(absorption, exact_x, rtol=2e-7, atol=2e-9)
+    assert_allclose(scattering, exact_r, rtol=2e-6, atol=2e-8)
 
 
-def test_siam_occupancy_search_contracts_potential_and_restores_constant(tmp_path, monkeypatch):
+def test_legacy_siam_occupancy_search_keeps_historical_core_convention(tmp_path, monkeypatch):
     from mpi4py import MPI
     monkeypatch.chdir(tmp_path)
-    # Filled-core repulsion raises the impurity above the bath. Omitting the
-    # contraction incorrectly fills the impurity as well (N=4 instead of N=2).
+    # Legacy searches omit the core potential and constant. These parameters
+    # fill both impurity and bath (N=4); the modern filled-core model has N=2.
     kwargs = dict(shell_name=('s', 's'), nbath=1, c_level=-3,
                   imp_mat=np.diag([-0.8, -0.7]), bath_level=np.array([[-0.5, -0.4]]),
                   slater=([0, 0.8, 0, 0.6], [0, 0.8, 0, 0.6]))
     exact = {}
     for nocc in range(5):
         problem = edrixs.model_siam(**kwargs, v_noccu=nocc)
-        hi = edrixs.build_op(*problem[:3], backend='dense')
+        hi = edrixs.build_op(
+            problem[0][:4, :4], problem[1][:4, :4, :4, :4],
+            edrixs.FockBasisSpec.from_args(4, nocc), backend='dense')
         exact[nocc] = np.linalg.eigvalsh(hi)[0]
-    assert min(exact, key=exact.get) == 2
+    assert min(exact, key=exact.get) == 4
     energies, density, nocc = edrixs.ed_siam_fort(
         MPI.COMM_WORLD, **kwargs, do_ed=0, ed_solver=0, neval=1, nvector=1)
-    assert nocc == 2
-    assert_allclose(energies, [exact[nocc]], atol=2e-9)
+    assert nocc == 4
+    assert_allclose(energies, [exact[nocc] + 2 * kwargs['c_level']], atol=2e-9)
     assert_allclose(np.trace(density[0]), nocc, atol=1e-12)
     for filename in ('search_gs.log', 'search_result.dat'):
         for sector, energy, _ in np.loadtxt(filename, ndmin=2):
             assert_allclose(energy, exact[int(sector)], atol=2e-9)
     staged = Path('hopping_i.in').read_bytes()
-    edrixs.get_ops(*edrixs.model_siam(**kwargs, v_noccu=nocc), backend='fortran')
+    edrixs.ed_siam_fort(MPI.COMM_WORLD, **kwargs, v_noccu=nocc, do_ed=2)
     assert Path('hopping_i.in').read_bytes() == staged
 
 
@@ -143,7 +160,8 @@ def test_legacy_file_only_modes_do_not_write_on_nonroot(kind, tmp_path, monkeypa
     for module in (solvers, helpers, fortran_backend):
         for name in ('write_emat', 'write_umat', 'write_config'):
             monkeypatch.setattr(module, name, forbidden)
-    monkeypatch.setattr(fortran_backend, '_write_fock_basis', forbidden)
+    monkeypatch.setattr(solvers, 'write_fock_dec_by_N', forbidden)
+    monkeypatch.setattr(helpers, 'write_fock_dec_by_N', forbidden)
     result = getattr(edrixs, 'ed_' + kind + '_fort')(
         Nonroot(), **_case(kind), do_ed=2 if kind == 'siam' else False)
     assert all(item is None for item in result)
