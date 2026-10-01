@@ -26,93 +26,13 @@ __all__ = [
 ]
 
 
-def owns_operator_dense(operator):
-    """Return whether ``operator`` is a dense NumPy matrix."""
-    return isinstance(operator, np.ndarray) and operator.ndim == 2
+def ed_dense(hmat_i, num_evals=1, *, shift=0.0, backend_kws=None):
+    """Diagonalize H - shift*I and restore the offset to its eigenvalues.
 
-
-def _dense_matrix(operator, name, *, square=False):
-    """Return one validated dense matrix."""
-    matrix = np.asarray(operator)
-    if matrix.ndim != 2:
-        raise ValueError("{} must be a two-dimensional array".format(name))
-    if square and matrix.shape[0] != matrix.shape[1]:
-        raise ValueError("{} must be square".format(name))
-    return matrix
-
-
-def _transition_array(trans_op, dim_n, dim_i):
-    """Return validated dense transition operators."""
-    transitions = np.asarray(trans_op, dtype=complex)
-    if transitions.ndim != 3:
-        raise ValueError("trans_op must be a three-dimensional array")
-    if transitions.shape[0] not in (3, 5):
-        raise ValueError(
-            "len(trans_op) must be 3 for dipole or 5 for quadrupole transitions"
-        )
-    expected = (transitions.shape[0], dim_n, dim_i)
-    if transitions.shape != expected:
-        raise ValueError(
-            "trans_op has shape {}, expected {}".format(
-                transitions.shape, expected
-            )
-        )
-    return transitions
-
-
-def _initial_states(eval_i, evec_i, dim_i=None):
-    """Return validated retained initial eigenpairs."""
-    energies = np.asarray(eval_i, dtype=float)
-    vectors = np.asarray(evec_i, dtype=complex)
-    if energies.ndim != 1:
-        raise ValueError("eval_i must be a one-dimensional array")
-    if len(energies) == 0:
-        raise ValueError("eval_i must contain at least one state")
-    if vectors.ndim != 2:
-        raise ValueError("evec_i must be a two-dimensional array")
-    if dim_i is None:
-        dim_i = vectors.shape[0]
-    if vectors.shape != (dim_i, len(energies)):
-        raise ValueError(
-            "evec_i has shape {}, expected {}".format(
-                vectors.shape, (dim_i, len(energies))
-            )
-        )
-    return energies, vectors
-
-
-def _scattering_axis(scatter_axis):
-    """Return a validated scattering frame."""
-    if scatter_axis is None:
-        return np.eye(3)
-    axis = np.asarray(scatter_axis, dtype=float)
-    if axis.shape != (3, 3):
-        raise ValueError("scatter_axis must have shape (3, 3)")
-    return axis
-
-
-def _energy_mesh(values, name):
-    """Return a validated one-dimensional energy mesh."""
-    mesh = np.asarray(values, dtype=float)
-    if mesh.ndim != 1:
-        raise ValueError("{} must be a one-dimensional array".format(name))
-    return mesh
-
-
-def build_op_dense(
-        emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
-    """Build a many-body operator and return it as a dense NumPy matrix."""
-    kws = validate_options('build_op', backend_kws)
-    return build_op_scipy(
-        emat, umat, lb, rb, use_numba=use_numba, backend_kws=kws
-    ).toarray()
-
-
-def ed_dense(hmat_i, num_evals=1, *, backend_kws=None):
-    """Exactly diagonalize a dense Hermitian Hamiltonian."""
+    ``shift`` is a real energy offset. The input Hamiltonian is not modified.
+    """
     validate_options('ed', backend_kws)
-    hamiltonian = _dense_matrix(hmat_i, 'hmat_i', square=True)
-    num_evals = int(num_evals)
+    hamiltonian = np.asarray(hmat_i)
     dimension = hamiltonian.shape[0]
     if num_evals < 1:
         raise ValueError("num_evals must be a positive integer")
@@ -120,23 +40,16 @@ def ed_dense(hmat_i, num_evals=1, *, backend_kws=None):
         raise ValueError("num_evals cannot exceed hmat_i.shape[0]")
 
     subset = None if num_evals == dimension else (0, num_evals - 1)
-    return scipy.linalg.eigh(hamiltonian, subset_by_index=subset)
-
-
-def _xas_polarization_vector(
-        ntrans, kind, alpha, thin, phi, scatter_axis, wavevector):
-    """Return one XAS polarization vector in transition-component space."""
-    kind = kind.strip().lower()
-    if kind not in ('linear', 'left', 'right'):
-        raise ValueError("Unknown XAS polarization type: {}".format(kind))
-    dipole = dipole_polvec_xas(
-        thin, phi, alpha, scatter_axis, kind
+    if shift != 0:
+        hamiltonian = np.array(
+            hamiltonian, dtype=np.result_type(hamiltonian.dtype, float),
+            copy=True,
+        )
+        hamiltonian[np.diag_indices_from(hamiltonian)] -= shift
+    eigenvalues, eigenvectors = scipy.linalg.eigh(
+        hamiltonian, subset_by_index=subset
     )
-    return (
-        np.asarray(dipole, dtype=complex)
-        if ntrans == 3
-        else quadrupole_polvec(dipole, wavevector)
-    )
+    return eigenvalues + shift, eigenvectors
 
 
 def xas_dense(
@@ -145,13 +58,14 @@ def xas_dense(
         scatter_axis=None, backend_kws=None):
     """Calculate XAS by summing over the exact intermediate eigenstates."""
     validate_options('xas', backend_kws)
-    hamiltonian_n = _dense_matrix(hmat_n, 'hmat_n', square=True)
+    hamiltonian_n = np.asarray(hmat_n)
     energies_i, vectors_i = _initial_states(eval_i, evec_i)
     transitions = _transition_array(
         trans_op, hamiltonian_n.shape[0], vectors_i.shape[0]
     )
     incident_energies = _energy_mesh(ominc, 'ominc')
-    axis = _scattering_axis(scatter_axis)
+    if scatter_axis is not None and np.shape(scatter_axis) != (3, 3):
+        raise ValueError("scatter_axis must have shape (3, 3)")
     gamma_core = _expand_broadening(
         gamma_c, len(incident_energies), 'gamma_c'
     )
@@ -178,7 +92,7 @@ def xas_dense(
     )
     probabilities = boltz_dist(energies_i, temperature)
     spectrum = np.zeros((len(incident_energies), len(pol_type)), dtype=float)
-    wavevector = unit_wavevector(thin, phi, axis, direction='in')
+    wavevector = unit_wavevector(thin, phi, scatter_axis, direction='in')
     ntrans = transitions.shape[0]
 
     for channel, (kind, alpha) in enumerate(pol_type):
@@ -186,9 +100,13 @@ def xas_dense(
         if kind == 'isotropic':
             strengths = np.sum(np.abs(transitions_eigen) ** 2, axis=0) / ntrans
         else:
-            polarization = _xas_polarization_vector(
-                ntrans, kind, alpha, thin, phi, axis, wavevector
+            if kind not in ('linear', 'left', 'right'):
+                raise ValueError("Unknown XAS polarization type: {}".format(kind))
+            polarization = dipole_polvec_xas(
+                thin, phi, alpha, scatter_axis, kind
             )
+            if ntrans == 5:
+                polarization = quadrupole_polvec(polarization, wavevector)
             amplitudes = np.einsum(
                 'k,kni->ni', polarization, transitions_eigen,
                 optimize=True,
@@ -202,58 +120,6 @@ def xas_dense(
     return spectrum
 
 
-def _rixs_polarization_vectors(
-        ntrans, thin, thout, phi, incoming_kind, alpha,
-        outgoing_kind, beta, scatter_axis):
-    """Return incoming and outgoing RIXS transition-component vectors."""
-    incoming_kind = incoming_kind.strip().lower()
-    outgoing_kind = outgoing_kind.strip().lower()
-    incoming, outgoing = dipole_polvec_rixs(
-        thin, thout, phi, alpha, beta, scatter_axis,
-        (incoming_kind, outgoing_kind),
-    )
-    if ntrans == 3:
-        return (
-            np.asarray(incoming, dtype=complex),
-            np.asarray(outgoing, dtype=complex),
-        )
-    incoming_wavevector = unit_wavevector(
-        thin, phi, scatter_axis, direction='in'
-    )
-    outgoing_wavevector = unit_wavevector(
-        thout, phi, scatter_axis, direction='out'
-    )
-    return (
-        quadrupole_polvec(incoming, incoming_wavevector),
-        quadrupole_polvec(outgoing, outgoing_wavevector),
-    )
-
-
-def _pole_record(hamiltonian, vector, initial_energy):
-    """Represent one exact dense final-state vector in pole-dictionary form."""
-    if np.linalg.norm(vector) == 0:
-        alpha = np.array([0.0], dtype=float)
-        beta = np.array([], dtype=float)
-        norm = 0.0
-    else:
-        alpha, beta, norm = lanczos_tridiagonal(
-            hamiltonian, vector, m=hamiltonian.shape[0]
-        )
-    return {
-        'eigval': float(initial_energy),
-        'npoles': len(alpha),
-        'norm': float(np.real(norm)),
-        'alpha': np.asarray(alpha),
-        'beta': np.asarray(beta),
-    }
-
-
-def _pole_dict(records):
-    """Combine per-initial-state pole records into the public dictionary."""
-    keys = ('npoles', 'eigval', 'norm', 'alpha', 'beta')
-    return {key: [record[key] for record in records] for key in keys}
-
-
 def rixs_dense(
         eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         gamma_c=0.1, gamma_f=0.01, thin=1.0, thout=1.0, phi=0.0,
@@ -261,8 +127,8 @@ def rixs_dense(
         skip_gs=False, return_poles=False, backend_kws=None):
     """Calculate RIXS by summing over exact intermediate and final states."""
     validate_options('rixs', backend_kws)
-    hamiltonian_i = _dense_matrix(hmat_i, 'hmat_i', square=True)
-    hamiltonian_n = _dense_matrix(hmat_n, 'hmat_n', square=True)
+    hamiltonian_i = np.asarray(hmat_i)
+    hamiltonian_n = np.asarray(hmat_n)
     energies_i, vectors_i = _initial_states(
         eval_i, evec_i, hamiltonian_i.shape[0]
     )
@@ -277,7 +143,8 @@ def rixs_dense(
     gamma_final = _expand_broadening(
         gamma_f, len(energy_losses), 'gamma_f'
     )
-    axis = _scattering_axis(scatter_axis)
+    if scatter_axis is not None and np.shape(scatter_axis) != (3, 3):
+        raise ValueError("scatter_axis must have shape (3, 3)")
     if pol_type is None:
         pol_type = [('linear', 0.0, 'linear', 0.0)]
 
@@ -311,16 +178,25 @@ def rixs_dense(
         [None for _ in pol_type]
         for _ in incident_energies
     ] if return_poles else None
-    retained_in_final_basis = vectors_f.conj().T @ vectors_i
+    if skip_gs:
+        retained_in_final_basis = vectors_f.conj().T @ vectors_i
     ntrans = transitions.shape[0]
 
-    polarizations = [
-        _rixs_polarization_vectors(
-            ntrans, thin, thout, phi,
-            incoming_kind, alpha, outgoing_kind, beta, axis,
+    polarizations = []
+    if ntrans == 5:
+        wavevector_i = unit_wavevector(thin, phi, scatter_axis, direction='in')
+        wavevector_f = unit_wavevector(
+            thout, phi, scatter_axis, direction='out'
         )
-        for incoming_kind, alpha, outgoing_kind, beta in pol_type
-    ]
+    for incoming_kind, alpha, outgoing_kind, beta in pol_type:
+        incoming, outgoing = dipole_polvec_rixs(
+            thin, thout, phi, alpha, beta, scatter_axis,
+            (incoming_kind.strip().lower(), outgoing_kind.strip().lower()),
+        )
+        if ntrans == 5:
+            incoming = quadrupole_polvec(incoming, wavevector_i)
+            outgoing = quadrupole_polvec(outgoing, wavevector_f)
+        polarizations.append((incoming, outgoing))
     for incident_index, omega in enumerate(incident_energies):
         denominator = 1.0 / (
             omega - (energies_n[:, None] - energies_i[None, :])
@@ -348,13 +224,84 @@ def rixs_dense(
             )
             if return_poles:
                 final_vectors = vectors_f @ amplitudes
-                poles[incident_index][channel] = _pole_dict([
-                    _pole_record(
-                        hamiltonian_i,
-                        final_vectors[:, state],
-                        energies_i[state],
-                    )
-                    for state in range(len(energies_i))
-                ])
+                records = {
+                    'eigval': [], 'npoles': [], 'norm': [],
+                    'alpha': [], 'beta': [],
+                }
+                for energy, vector in zip(energies_i, final_vectors.T):
+                    if np.linalg.norm(vector) == 0:
+                        alpha, beta, norm = np.array([0.0]), np.array([]), 0.0
+                    else:
+                        alpha, beta, norm = lanczos_tridiagonal(
+                            hamiltonian_i, vector, m=hamiltonian_i.shape[0]
+                        )
+                    records['eigval'].append(energy)
+                    records['npoles'].append(len(alpha))
+                    records['norm'].append(norm)
+                    records['alpha'].append(alpha)
+                    records['beta'].append(beta)
+                poles[incident_index][channel] = records
 
     return (spectrum, poles) if return_poles else spectrum
+
+
+def owns_operator_dense(operator):
+    """Return whether ``operator`` is a dense NumPy matrix."""
+    return isinstance(operator, np.ndarray) and operator.ndim == 2
+
+
+def build_op_dense(
+        emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
+    """Build a many-body operator and return it as a dense NumPy matrix."""
+    kws = validate_options('build_op', backend_kws)
+    return build_op_scipy(
+        emat, umat, lb, rb, use_numba=use_numba, backend_kws=kws
+    ).toarray()
+
+
+def _transition_array(trans_op, dim_n, dim_i):
+    """Return validated dense transition operators."""
+    transitions = np.asarray(trans_op)
+    if transitions.ndim != 3:
+        raise ValueError("trans_op must be a three-dimensional array")
+    if transitions.shape[0] not in (3, 5):
+        raise ValueError(
+            "len(trans_op) must be 3 for dipole or 5 for quadrupole transitions"
+        )
+    expected = (transitions.shape[0], dim_n, dim_i)
+    if transitions.shape != expected:
+        raise ValueError(
+            "trans_op has shape {}, expected {}".format(
+                transitions.shape, expected
+            )
+        )
+    return transitions
+
+
+def _initial_states(eval_i, evec_i, dim_i=None):
+    """Return validated retained initial eigenpairs."""
+    energies = np.asarray(eval_i)
+    vectors = np.asarray(evec_i)
+    if energies.ndim != 1:
+        raise ValueError("eval_i must be a one-dimensional array")
+    if len(energies) == 0:
+        raise ValueError("eval_i must contain at least one state")
+    if vectors.ndim != 2:
+        raise ValueError("evec_i must be a two-dimensional array")
+    if dim_i is None:
+        dim_i = vectors.shape[0]
+    if vectors.shape != (dim_i, len(energies)):
+        raise ValueError(
+            "evec_i has shape {}, expected {}".format(
+                vectors.shape, (dim_i, len(energies))
+            )
+        )
+    return energies, vectors
+
+
+def _energy_mesh(values, name):
+    """Return a validated one-dimensional energy mesh."""
+    mesh = np.asarray(values)
+    if mesh.ndim != 1:
+        raise ValueError("{} must be a one-dimensional array".format(name))
+    return mesh

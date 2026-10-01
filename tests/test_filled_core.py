@@ -95,12 +95,12 @@ def test_native_basis_encoding_preserves_restricted_sectors(tmp_path, monkeypatc
 def test_zero_valence_native_limit(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     problem = edrixs.model_1v1c(('s', 's'), v_noccu=0, shell_level=(0, -2))
-    full = edrixs.get_ops(*problem, backend='dense')[0]
+    full = edrixs.get_ops(*problem[:7], backend='dense')[0]
     assert_allclose(full, [[-4]])
     with pytest.raises(ValueError, match='nonzero core energy.*zero-valence'):
-        fort.write_problem(*problem)
+        fort.write_problem(*problem[:7])
     # No constant is needed for this sector, so it is representable.
-    fort.write_problem(*edrixs.model_1v1c(('s', 's'), v_noccu=0))
+    fort.write_problem(*edrixs.model_1v1c(('s', 's'), v_noccu=0)[:7])
     assert Path('fock_i.in').read_text().split() == ['1', '0']
 
 

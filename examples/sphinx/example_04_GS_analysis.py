@@ -24,12 +24,12 @@ import edrixs
 import contextlib
 import io
 with contextlib.redirect_stdout(io.StringIO()):
-    from example_03_AIM_XAS import emat_i, basis_i, hmat_i, norb_d
+    from example_03_AIM_XAS import emat_i, basis_i, hmat_i, norb_d, shift
 plt.close('all')
 # sphinx_gallery_end_ignore
 
 backend = 'scipy'
-eval_i, evec_i = edrixs.ed(hmat_i, num_evals=len(basis_i), backend=backend)
+eval_i, evec_i = edrixs.ed(hmat_i, shift=shift, num_evals=len(basis_i), backend=backend)
 eval_i = eval_i - eval_i.min()
 
 ################################################################################

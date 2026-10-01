@@ -48,7 +48,7 @@ def test_fortran_ed_xas_rixs_matches_its_core_convention(kind, route, tmp_path, 
         valence_u = problem[1][:nv, :nv, :nv, :nv].copy()
         problem[1] = np.zeros_like(problem[1])
         problem[1][:nv, :nv, :nv, :nv] = valence_u
-    dense_i, dense_n, dense_t = edrixs.get_ops(*problem, backend='dense')
+    dense_i, dense_n, dense_t = edrixs.get_ops(*problem[:7], backend='dense')
     exact_e, exact_v = np.linalg.eigh(dense_i)
     center = np.median(np.linalg.eigvalsh(dense_n)) - exact_e[0]
     ominc = np.array([center - 0.15, center + 0.2])
@@ -61,7 +61,7 @@ def test_fortran_ed_xas_rixs_matches_its_core_convention(kind, route, tmp_path, 
     exact_r = edrixs.rixs(exact_e[:1], exact_v[:, :1], dense_i, dense_n, dense_t,
                          ominc, loss, backend='dense', **rargs)
     if route == 'modern':
-        hi, hn, trans = edrixs.get_ops(*problem, backend='fortran')
+        hi, hn, trans = edrixs.get_ops(*problem[:7], backend='fortran')
         energies, vectors = edrixs.ed(hi, num_evals=1,
                                      backend_kws={'ed_solver': 0, 'nvector': 1})
         absorption = edrixs.xas(energies, vectors, hn, trans, ominc,

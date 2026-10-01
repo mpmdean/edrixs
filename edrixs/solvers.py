@@ -221,7 +221,7 @@ def get_ops_disk():
     return fortran_backend.get_ops_disk()
 
 
-def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
+def ed(hmat_i, num_evals=1, *, shift=0.0, backend=None, backend_kws=None):
     """
     Compute low-energy initial states through a numerical backend.
 
@@ -231,6 +231,11 @@ def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
         Initial/final Hamiltonian.
     num_evals : int, optional
         Number of lowest eigenpairs to return.
+    shift : float, optional
+        Real energy offset, normally the final output of a model
+        constructor. Dense and SciPy ED diagonalize ``hmat_i - shift * I``
+        and add the offset back to the returned eigenvalues. The supplied
+        Hamiltonian is not modified. Default zero; other backends require zero.
     backend : str or None, optional
         Backend name. When omitted, infer it from ``hmat_i``.
     backend_kws : mapping, optional
@@ -241,7 +246,8 @@ def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
     Returns
     -------
     eigenvalues, eigenvectors
-        Lowest retained eigenpairs.
+        Lowest retained eigenpairs, with eigenvalues on the original energy
+        reference even when a nonzero ``shift`` is supplied.
     """
     backend_name = backend if backend is not None else _infer_backend(hmat_i)
     match backend_name:
@@ -262,6 +268,7 @@ def ed(hmat_i, num_evals=1, *, backend=None, backend_kws=None):
     return ed_backend(
         hmat_i,
         num_evals=num_evals,
+        shift=shift,
         backend_kws=backend_kws,
     )
 

@@ -77,13 +77,19 @@ def model_1v1c(shell_name, *, shell_level=None, v_soc=None, c_soc=0,
 
     Returns
     -------
-    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
+    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, shift
         Backend-independent problem definition. ``basis_i`` and ``basis_n`` are
         compact Fock-basis specifications with a filled initial core and one
         intermediate core hole. Occupancy arguments count valence electrons
         only. Both one-body matrices have shape (ntot, ntot), both dense
         Coulomb tensors have shape (ntot,) * 4, and trans_mat has shape
         (npol, ntot, ntot). Initial core interactions are included.
+        ``shift`` is the filled core shell-level energy,
+        ``c_norb * shell_level[1]`` (zero if unspecified), excluding Coulomb
+        contributions.
+        Pass the first seven outputs to :func:`~edrixs.solvers.get_ops` and
+        ``shift`` to dense or SciPy :func:`~edrixs.solvers.ed`.
+        The returned integrals retain the full, unshifted energies.
     """
     if verbose:
         print("edrixs >>> Setting up 1v1c problem ...")
@@ -236,7 +242,8 @@ def model_1v1c(shell_name, *, shell_level=None, v_soc=None, c_soc=0,
     if verbose:
         print("edrixs >>> 1v1c setup Done !")
 
-    return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
+    shift = 0.0 if shell_level is None else float(c_norb * shell_level[1])
+    return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, shift
 
 
 def model_2v1c(
@@ -345,8 +352,11 @@ def model_2v1c(
         Core-to-valence transition matrices in the global frame, with shape
         ``(npol, ntot, ntot)``.
 
-        The returned objects can be passed directly to
-        :func:`~edrixs.solvers.get_ops`.
+    shift : float
+        Filled core shell-level energy, ``c_norb * shell_level[2]`` (zero if
+        unspecified), excluding Coulomb contributions. Pass the first seven
+        outputs to :func:`~edrixs.solvers.get_ops` and ``shift`` to dense or
+        SciPy :func:`~edrixs.solvers.ed`. Integrals remain unshifted.
 
     See Also
     --------
@@ -362,7 +372,7 @@ def model_2v1c(
     Construct a model for two valence shells and build its SciPy operators:
 
     >>> import edrixs
-    >>> problem = edrixs.model_2v1c(
+    >>> *problem, shift = edrixs.model_2v1c(
     ...     ('d', 'p', 's'), v_tot_noccu=2, trans_to_which=2
     ... )
     >>> hmat_i, hmat_n, trans_ops = edrixs.get_ops(
@@ -556,7 +566,8 @@ def model_2v1c(
     if verbose:
         print("edrixs >>> 2v1c setup Done !")
 
-    return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
+    shift = 0.0 if shell_level is None else float(c_norb * shell_level[2])
+    return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, shift
 
 
 def model_siam(
@@ -715,6 +726,11 @@ def model_siam(
         Core-to-impurity absorption matrices, with nonzero entries only in
         the impurity-row/core-column block. ``npol`` is 3 for dipole and 5
         for quadrupole transitions; components are in the global frame.
+    shift : float
+        Filled core shell-level energy, ``c_norb * c_level``, excluding
+        Coulomb contributions. Pass the first seven outputs to
+        :func:`~edrixs.solvers.get_ops` and ``shift`` to dense or SciPy
+        :func:`~edrixs.solvers.ed`. Integrals remain unshifted.
     """
     if verbose:
         print("edrixs >>> Setting up SIAM problem ...")
@@ -889,7 +905,8 @@ def model_siam(
     if verbose:
         print("edrixs >>> SIAM setup Done !")
 
-    return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
+    shift = float(c_norb * c_level)
+    return emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, shift
 
 
 def model_siam_2d1p(
@@ -943,8 +960,11 @@ def model_siam_2d1p(
 
     Returns
     -------
-    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat
-        The seven model_siam outputs, ready for :func:`~edrixs.solvers.get_ops`. One-body
+    emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, shift
+        The eight model_siam outputs. Pass the first seven to
+        :func:`~edrixs.solvers.get_ops` and the final ``shift`` to dense or
+        SciPy :func:`~edrixs.solvers.ed`. Here ``shift = 6 * (-om_shift - 5*E_p)``;
+        it excludes Coulomb contributions and does not alter the integrals. One-body
         matrices both have shape (26, 26) and use complex spherical
         harmonics. Basis metadata fixes initial valence occupancy to nd+10,
         intermediate valence occupancy to nd+11, and core occupancies to six

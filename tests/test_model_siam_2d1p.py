@@ -72,6 +72,7 @@ def test_explicit_equivalence(params, modified):
         assert_allclose(actual[i], expected[i], atol=1e-10)
     for i in (2, 5):
         assert actual[i].shapes == expected[i].shapes
+    assert actual[7] == expected[7]
     assert actual[2].shapes == ((20, 18), (6, 6))
     assert actual[5].shapes == ((20, 19), (6, 5))
     for i in (0, 3):
@@ -84,9 +85,12 @@ def test_sparse_and_shift(params):
     for i in (1, 4):
         dim = original[i].shape[0] ** 2
         assert_allclose(sparse[i].toarray(), original[i].reshape(dim, dim), atol=1e-10)
+    assert sparse[7] == original[7]
+    assert_allclose(original[7], np.trace(original[0][20:, 20:]))
     shift = 2.5
     params['om_shift'] += shift
     shifted = edrixs.model_siam_2d1p(**params)
+    assert_allclose(shifted[7] - original[7], -6 * shift)
     di = shifted[0] - original[0]
     dn = shifted[3] - original[3]
     expected = np.zeros((26, 26))

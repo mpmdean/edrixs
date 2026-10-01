@@ -29,7 +29,7 @@ from edrixs import FockBasisSpec
 import contextlib
 import io
 with contextlib.redirect_stdout(io.StringIO()):
-    from example_03_AIM_XAS import emat_i, umat_i, basis_i, norb_d, nd, nbath
+    from example_03_AIM_XAS import emat_i, umat_i, basis_i, norb_d, nd, nbath, shift
     from example_04_GS_analysis import O
 plt.close('all')
 # sphinx_gallery_end_ignore
@@ -39,7 +39,7 @@ emat_i[norb_d:(norb_d + nbath*norb_d), :norb_d] = 0
 
 backend = 'scipy'
 hmat_i = edrixs.build_op(emat_i, umat_i, basis_i, backend=backend)
-eval_i, evec_i = edrixs.ed(hmat_i, num_evals=len(basis_i), backend=backend)
+eval_i, evec_i = edrixs.ed(hmat_i, shift=shift, num_evals=len(basis_i), backend=backend)
 eval_i = eval_i - eval_i.min()
 
 nd_expect = np.sum(evec_i.conj() * (O @ evec_i), axis=0).real
@@ -91,7 +91,7 @@ energies = []
 for n_ligand_holes in [0, 1]:
     basis_d = FockBasisSpec.from_args(norb_d, nd + n_ligand_holes, norb_c, norb_c)
     Hd = edrixs.build_op(emat_d, umat_d, basis_d, backend='dense')
-    e_d = edrixs.ed(Hd, num_evals=1, backend='dense')[0][0]
+    e_d = edrixs.ed(Hd, shift=shift, num_evals=1, backend='dense')[0][0]
 
     basis_L = FockBasisSpec.from_args(norb_d, norb_d - n_ligand_holes)
     HL = edrixs.build_op(emat_i[L_block, L_block], None, basis_L, backend='dense')

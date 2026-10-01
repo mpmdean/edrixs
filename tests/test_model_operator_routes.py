@@ -87,13 +87,13 @@ def test_model_to_get_ops_all_scipy_routes_are_numerically_consistent(
     problem = _small_1v1c_problem()
 
     reference_i, reference_n, reference_t = get_ops(
-        *problem,
+        *problem[:7],
         backend="scipy",
         basis_method="explicit",
         use_numba=False,
     )
     actual_i, actual_n, actual_t = get_ops(
-        *problem,
+        *problem[:7],
         backend="scipy",
         basis_method=basis_method,
         use_numba=use_numba,

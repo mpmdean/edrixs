@@ -1,5 +1,9 @@
 """Backend implementation which delegates calculations to f2py solvers.
 
+This code is currently a somewhat cumbersome bridge between the revised frontend
+and the older Fortran. In the longer term, the Fortran will either be edited to
+generate a cleaner interface, or the Fortran may be removed from the codebase. 
+
 The Fortran programs communicate exclusively through their conventional input
 and output files in the current working directory.  ``get_ops`` writes the whole
 problem there -- ``hopping_*.in``, ``coulomb_*.in``, ``fock_*.in``,
@@ -261,7 +265,9 @@ def _run_solver(solver, comm, outputs=()):
     solver(comm.py2f(), rank, comm.Get_size())
 
 
-def ed_fortran(hmat_i, num_evals=1, *, backend_kws=None):
+def ed_fortran(hmat_i, num_evals=1, *, shift=0.0, backend_kws=None):
+    if shift != 0:
+        raise ValueError('nonzero shift is supported only by dense and scipy ED')
     options = validate_options('ed', backend_kws)
     nvector = int(options.get('nvector', num_evals))
     if nvector > num_evals:

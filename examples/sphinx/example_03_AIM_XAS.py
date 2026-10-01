@@ -206,7 +206,7 @@ out = edrixs.model_siam_2d1p(
     v_soc=v_soc, c_soc=c_soc, om_shift=om_shift,
     ext_B=ext_B, on_which=on_which,
 )
-emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat = out
+emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, shift = out
 
 ################################################################################
 # Diagonalization
@@ -227,7 +227,7 @@ hmat_i, hmat_n, trans_ops = edrixs.get_ops(
 # :func:`~edrixs.solvers.ed` obtains the retained low-energy eigenpairs of the
 # Hamiltonian without a core hole. Here :code:`num_evals=3` states are
 # thermally populated at the temperature of interest.
-eval_i, evec_i = edrixs.ed(hmat_i, num_evals=3, backend=backend)
+eval_i, evec_i = edrixs.ed(hmat_i, shift=shift, num_evals=3, backend=backend)
 
 ################################################################################
 # Compute XAS

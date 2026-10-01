@@ -58,8 +58,10 @@ def build_op_petsc(
     _not_implemented('build_op_petsc')
 
 
-def ed_petsc(hmat_i, num_evals=1, *, backend_kws=None):
+def ed_petsc(hmat_i, num_evals=1, *, shift=0.0, backend_kws=None):
     """Obtain low-energy eigenpairs with SLEPc/PETSc (stub)."""
+    if shift != 0:
+        raise ValueError('nonzero shift is supported only by dense and scipy ED')
     validate_options('ed', backend_kws)
     _petsc_module()
     _not_implemented('ed_petsc')
