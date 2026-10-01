@@ -146,6 +146,13 @@ The third stage finds the low-energy eigenstates of the many-body Hamiltonian.
 * The ``petsc`` backend is currently an interface stub.  Requesting it raises
   ``NotImplementedError`` rather than returning eigenvectors.
 
+Dense and SciPy ED accept ``shift=shift``, where ``shift`` is the eighth
+output of a model constructor. They diagonalize :math:`H - \mathrm{shift} I`
+and restore the offset in ``eval_i``. The Hamiltonian supplied by the caller
+remains unchanged, so XAS and RIXS continue using the same energy reference.
+Pass only the first seven model outputs to ``get_ops``. Fortran ED does not
+support nonzero ``shift``.
+
 .. _xas:
 
 XAS
