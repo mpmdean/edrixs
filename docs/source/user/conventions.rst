@@ -102,7 +102,7 @@ Fock basis
   spin-orbitals.
 * **Encoding.** A Fock state is a string of 1s (occupied) and 0s (empty) over
   the single-particle spin-orbitals, stored as an integer for efficiency.
-  Orbital zero occupies the least significant bit, matching native Fortran:
+  Orbital zero occupies the least significant bit:
   orbital ``i`` has mask ``1 << i``. Occupation lists remain in increasing
   orbital order; ordinary binary integer displays place orbital zero at the
   right. Basis row ordering is unchanged.
