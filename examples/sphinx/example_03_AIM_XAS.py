@@ -193,7 +193,11 @@ on_which = 'spin'
 # from the parameters above. It builds the one-body matrices, Coulomb tensors,
 # and Fock-basis metadata; diagonalization remains a separate step. The returned
 # i quantities describe initial/final states without a core hole, while the n
-# quantities describe the intermediate state with a core hole. trans_mat holds
+# quantities describe the intermediate state with a core hole. Both one-body
+# matrices have shape (26, 26), and both Coulomb tensors include core orbitals.
+# The initial basis is ((20, 18), (6, 6)); the occupancy nd+10 counts only
+# impurity and bath electrons. Initial core interactions are active when supplied.
+# trans_mat holds
 # the Cartesian dipole matrices. General bath or hopping matrices can instead
 # be supplied through :func:`~edrixs.models.model_siam`.
 out = edrixs.model_siam_2d1p(

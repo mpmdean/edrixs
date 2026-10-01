@@ -14,8 +14,9 @@ from pathlib import Path
 import traceback
 
 import numpy as np
+import scipy.sparse as sp
 
-from ..fock_basis import write_fock_dec_by_N
+from ..fock_basis import FockBasisSpec, build_fock_basis
 from ..photon_transition import dipole_polvec_xas, dipole_polvec_rixs, quadrupole_polvec, unit_wavevector
 from ..poles import get_spectra_from_poles, merge_pole_dicts
 from .iostream_fortran import (
@@ -101,6 +102,86 @@ def _basis_spec(basis, name):
     return spec
 
 
+def _write_fock_basis(basis, num_core_orbs, fname):
+    """Mask off core orbitals and write unique, sorted native valence states.
+
+    Python and Fortran both store orbital zero in the least significant bit.
+    Core-hole configurations collapse onto the same intermediate valence state.
+    """
+    basis = build_fock_basis(basis)
+    valence_mask = (1 << (basis.norbs - num_core_orbs)) - 1
+    states = {basis.decode(i) & valence_mask for i in range(len(basis))}
+    with Path(fname).open('w') as stream:
+        stream.write(f'{len(states)}\n')
+        for state in sorted(states):
+            stream.write(f'{state}\n')
+
+
+def _write_fock_sector(nv, nocc, nc, fname, *, core_hole=False):
+    """Stage a legacy fixed-occupancy sector through the full-core convention."""
+    basis = FockBasisSpec.from_args(nv, nocc, nc, nc - int(core_hole))
+    _write_fock_basis(basis, nc, fname)
+
+
+def _reduce_initial_integrals(emat, umat, num_val_orbs):
+    """Contract a filled core for ``U[p,q,r,s] c†p c†q cr cs``.
+
+    Return independent valence one-/two-body arrays and the core constant.
+    Flattened sparse Coulomb tensors stay sparse throughout the reduction.
+    """
+    nv = num_val_orbs
+    ntot = len(emat)
+    h = np.array(emat[:nv, :nv], dtype=complex, copy=True)
+    core_energy = np.trace(emat[nv:, nv:])
+    if sp.issparse(umat):
+        coo = umat.tocoo(copy=True)
+        p, q = coo.row // ntot, coo.row % ntot
+        r, s = coo.col // ntot, coo.col % ntot
+        values = coo.data
+        valence = (p < nv) & (q < nv) & (r < nv) & (s < nv)
+        u = sp.coo_matrix(
+            (values[valence], (p[valence] * nv + q[valence],
+                               r[valence] * nv + s[valence])),
+            shape=(nv * nv, nv * nv),
+        ).tocsr()
+        for mask, row, col, sign in (
+            ((p < nv) & (q >= nv) & (q == r) & (s < nv), p, s, 1),
+            ((p < nv) & (q >= nv) & (q == s) & (r < nv), p, r, -1),
+            ((p >= nv) & (q < nv) & (p == r) & (s < nv), q, s, -1),
+            ((p >= nv) & (q < nv) & (p == s) & (r < nv), q, r, 1),
+        ):
+            np.add.at(h, (row[mask], col[mask]), sign * values[mask])
+        core = (p >= nv) & (q >= nv) & (r >= nv) & (s >= nv)
+        core_energy += values[core & (p == s) & (q == r)].sum()
+        core_energy -= values[core & (p == r) & (q == s)].sum()
+    else:
+        u = np.array(umat[:nv, :nv, :nv, :nv], copy=True)
+        for a in range(nv, ntot):
+            h += (umat[:nv, a, a, :nv] - umat[:nv, a, :nv, a]
+                  - umat[a, :nv, a, :nv] + umat[a, :nv, :nv, a])
+            for b in range(nv, ntot):
+                core_energy += umat[a, b, b, a] - umat[a, b, a, b]
+    return h, u, core_energy
+
+
+def _write_initial_integrals(emat, umat, num_val_orbs, nocc, tol=1e-10,
+                             *, include_core_energy=True):
+    """Reduce and stage the initial integrals, without modifying caller data."""
+    h, u, core_energy = _reduce_initial_integrals(emat, umat, num_val_orbs)
+    if include_core_energy:
+        if nocc == 0:
+            if abs(core_energy) > tol:
+                raise ValueError(
+                    'native Fortran cannot represent nonzero core energy '
+                    'in a zero-valence sector'
+                )
+        else:
+            h += np.eye(num_val_orbs) * (core_energy / nocc)
+    write_emat(h, 'hopping_i.in')
+    write_umat(u, 'coulomb_i.in', tol)
+    return core_energy
+
+
 def _write_transition_components(trans_mat, fname):
     """Write dense transition components in the backend's private format."""
     trans_mat = np.asarray(trans_mat, dtype=complex)
@@ -135,24 +216,22 @@ def write_problem(emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat,
     """
     options = validate_options('get_ops', backend_kws)
     comm = _communicator(options)
-    # ``basis_i`` is the valence-only initial sector; ``basis_n`` appends the
-    # core-hole sector.  The native fock files span the valence orbitals only,
-    # with one extra valence electron in the intermediate state.
-    num_val_orbs, v_noccu = _basis_spec(basis_i, 'basis_i').shapes[0]
-    num_core_orbs = _basis_spec(basis_n, 'basis_n').shapes[-1][0]
+    spec_i = _basis_spec(basis_i, 'basis_i')
+    num_core_orbs = spec_i.shapes[-1][0]
+    num_val_orbs = spec_i.norbs - num_core_orbs
+    v_noccu = sum(nocc for _, nocc in spec_i.shapes[:-1])
     trans_mat = np.asarray(trans_mat)
     if trans_mat.ndim != 3:
         raise ValueError("trans_mat must be a three-dimensional array")
 
     def write_inputs():
-        write_emat(np.asarray(emat_i), 'hopping_i.in')
         write_emat(np.asarray(emat_n), 'hopping_n.in')
         tol = options.get('tol', OPTIONS['get_ops']['tol'].default)
-        write_umat(umat_i, 'coulomb_i.in', tol)
+        _write_initial_integrals(emat_i, umat_i, num_val_orbs, v_noccu, tol)
         write_umat(umat_n, 'coulomb_n.in', tol)
-        write_fock_dec_by_N(num_val_orbs, v_noccu, 'fock_i.in')
-        write_fock_dec_by_N(num_val_orbs, v_noccu + 1, 'fock_n.in')
-        write_fock_dec_by_N(num_val_orbs, v_noccu, 'fock_f.in')
+        _write_fock_basis(basis_i, num_core_orbs, 'fock_i.in')
+        _write_fock_basis(basis_n, num_core_orbs, 'fock_n.in')
+        _write_fock_basis(basis_i, num_core_orbs, 'fock_f.in')
         write_config(num_val_orbs=num_val_orbs, num_core_orbs=num_core_orbs)
         _write_transition_components(trans_mat, 'transop_components.in')
 

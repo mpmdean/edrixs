@@ -39,11 +39,11 @@ def owns_operator_scipy(operator):
 # -----------------------------------------------------------------------------
 
 
-def _count_occupied_before(state, orbital, norbs):
+def _count_occupied_before(state, orbital):
     """
     Count occupied orbitals preceding ``orbital`` in the bit convention.
     """
-    return (int(state) >> (norbs - orbital)).bit_count()
+    return (int(state) & ((1 << int(orbital)) - 1)).bit_count()
 
 
 def two_fermion_csr(emat, left_basis, right_basis=None, tol=1e-10):
@@ -79,19 +79,19 @@ def two_fermion_csr(emat, left_basis, right_basis=None, tol=1e-10):
     iorb_all, jorb_all = np.nonzero(np.abs(emat) > tol)
 
     for iorb, jorb in zip(iorb_all, jorb_all):
-        bit_j = 1 << (norbs - 1 - jorb)
-        bit_i = 1 << (norbs - 1 - iorb)
+        bit_j = 1 << int(jorb)
+        bit_i = 1 << int(iorb)
 
         for column in range(len(right_basis)):
             state = right_basis.decode(column)
             if not state & bit_j:
                 continue
-            sign_1 = (-1) ** _count_occupied_before(state, jorb, norbs)
+            sign_1 = (-1) ** _count_occupied_before(state, jorb)
             state ^= bit_j
 
             if state & bit_i:
                 continue
-            sign_2 = (-1) ** _count_occupied_before(state, iorb, norbs)
+            sign_2 = (-1) ** _count_occupied_before(state, iorb)
             state |= bit_i
 
             try:
@@ -135,31 +135,31 @@ def four_fermion_csr(umat, left_basis, right_basis=None, tol=1e-10):
         if iorb == jorb or korb == lorb:
             continue
 
-        bit_i = 1 << (norbs - 1 - iorb)
-        bit_j = 1 << (norbs - 1 - jorb)
-        bit_k = 1 << (norbs - 1 - korb)
-        bit_l = 1 << (norbs - 1 - lorb)
+        bit_i = 1 << int(iorb)
+        bit_j = 1 << int(jorb)
+        bit_k = 1 << int(korb)
+        bit_l = 1 << int(lorb)
 
         for column in range(len(right_basis)):
             state = right_basis.decode(column)
             if not state & bit_i:
                 continue
-            sign_1 = (-1) ** _count_occupied_before(state, iorb, norbs)
+            sign_1 = (-1) ** _count_occupied_before(state, iorb)
             state ^= bit_i
 
             if not state & bit_j:
                 continue
-            sign_2 = (-1) ** _count_occupied_before(state, jorb, norbs)
+            sign_2 = (-1) ** _count_occupied_before(state, jorb)
             state ^= bit_j
 
             if state & bit_k:
                 continue
-            sign_3 = (-1) ** _count_occupied_before(state, korb, norbs)
+            sign_3 = (-1) ** _count_occupied_before(state, korb)
             state |= bit_k
 
             if state & bit_l:
                 continue
-            sign_4 = (-1) ** _count_occupied_before(state, lorb, norbs)
+            sign_4 = (-1) ** _count_occupied_before(state, lorb)
             state |= bit_l
 
             try:
@@ -214,31 +214,31 @@ def _four_fermion_csr_from_sparse_umat(
         if iorb == jorb or korb == lorb:
             continue
 
-        bit_i = 1 << (norbs - 1 - iorb)
-        bit_j = 1 << (norbs - 1 - jorb)
-        bit_k = 1 << (norbs - 1 - korb)
-        bit_l = 1 << (norbs - 1 - lorb)
+        bit_i = 1 << int(iorb)
+        bit_j = 1 << int(jorb)
+        bit_k = 1 << int(korb)
+        bit_l = 1 << int(lorb)
 
         for column in range(len(right_basis)):
             state = right_basis.decode(column)
             if not state & bit_i:
                 continue
-            sign_1 = (-1) ** _count_occupied_before(state, iorb, norbs)
+            sign_1 = (-1) ** _count_occupied_before(state, iorb)
             state ^= bit_i
 
             if not state & bit_j:
                 continue
-            sign_2 = (-1) ** _count_occupied_before(state, jorb, norbs)
+            sign_2 = (-1) ** _count_occupied_before(state, jorb)
             state ^= bit_j
 
             if state & bit_k:
                 continue
-            sign_3 = (-1) ** _count_occupied_before(state, korb, norbs)
+            sign_3 = (-1) ** _count_occupied_before(state, korb)
             state |= bit_k
 
             if state & bit_l:
                 continue
-            sign_4 = (-1) ** _count_occupied_before(state, lorb, norbs)
+            sign_4 = (-1) ** _count_occupied_before(state, lorb)
             state |= bit_l
 
             try:

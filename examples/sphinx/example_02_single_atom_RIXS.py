@@ -67,7 +67,9 @@ slater = [slater_i, slater_n]
 # coupling and, below, the crystal field.
 # :code:`i` quantities describe the initial and final states without a core
 # hole, while the :code:`n` quantities describe the intermediate state with a
-# core hole.
+# core hole. Both orbital-space Hamiltonians include the core, and basis_i
+# explicitly fixes its occupancy to a full shell. The v_noccu argument counts
+# only valence electrons.
 #
 # :func:`~edrixs.solvers.get_ops` converts these backend-independent
 # ingredients into many-body initial/final and intermediate Hamiltonians, plus

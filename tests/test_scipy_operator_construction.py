@@ -41,7 +41,7 @@ def test_one_body_csr_matches_independent_jordan_wigner_oracle():
 
 def test_one_particle_sector_reproduces_orbital_matrix():
     """A one-particle Fock-space operator reproduces its orbital matrix."""
-    basis = FockBasis([0b10, 0b01], norbs=2)
+    basis = FockBasis([0b01, 0b10], norbs=2)
     emat = np.array([[1.2, 0.3 + 0.4j], [0.3 - 0.4j, -0.2]])
 
     assert_allclose(two_fermion_csr(emat, basis).toarray(), emat)
@@ -79,8 +79,8 @@ def test_public_build_op_matches_backend_operator_construction():
 
 def test_public_build_op_constructs_transition_operator():
     """``build_op`` supports distinct left/right bases and no two-body part."""
-    left = FockBasis([0b10], norbs=2)
-    right = FockBasis([0b01], norbs=2)
+    left = FockBasis([0b01], norbs=2)
+    right = FockBasis([0b10], norbs=2)
     emat = np.array([[0.0, 2.0 - 0.5j], [0.0, 0.0]], dtype=complex)
 
     actual = build_op(emat, None, left, right, backend="scipy")

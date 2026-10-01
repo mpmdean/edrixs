@@ -13,7 +13,9 @@ from .photon_transition import (
     get_trans_oper, quadrupole_polvec, dipole_polvec_xas, dipole_polvec_rixs, unit_wavevector
 )
 from .coulomb_utensor import get_umat_slater, get_umat_slater_3shells
-from .fock_basis import write_fock_dec_by_N
+from .fortran_backend.fortran_backend import (
+    _write_fock_sector, _write_initial_integrals,
+)
 from .basis_transform import tmat_r2c
 from .utils import info_atomic_shell, slater_integrals_name
 from .poles import get_spectra_from_poles, merge_pole_dicts
@@ -314,7 +316,6 @@ def _ed_1or2_valence_1core(
         umat_n = get_umat_slater_3shells((v1_name, v2_name, c_name), *slater_n)
 
     if rank == 0:
-        write_umat(umat_i, 'coulomb_i.in')
         write_umat(umat_n, 'coulomb_n.in')
 
     emat_i = np.zeros((ntot, ntot), dtype=complex)
@@ -329,6 +330,7 @@ def _ed_1or2_valence_1core(
         emat_n[v1_norb:v1v2_norb, v1_norb:v1v2_norb] += atom_hsoc(v2_name, v2_soc[1])
 
     if c_name in ['p', 'd', 'f']:
+        emat_i[v1v2_norb:ntot, v1v2_norb:ntot] += atom_hsoc(c_name, c_soc)
         emat_n[v1v2_norb:ntot, v1v2_norb:ntot] += atom_hsoc(c_name, c_soc)
 
     # crystal field
@@ -351,14 +353,12 @@ def _ed_1or2_valence_1core(
 
     # energy of shell
     if shell_level is not None:
-        eval_shift = shell_level[2] * c_norb / v_tot_noccu
         emat_i[0:v1_norb, 0:v1_norb] += np.eye(v1_norb) * shell_level[0]
-        emat_i[0:v1_norb, 0:v1_norb] += np.eye(v1_norb) * eval_shift
         emat_n[0:v1_norb, 0:v1_norb] += np.eye(v1_norb) * shell_level[0]
+        emat_i[v1v2_norb:ntot, v1v2_norb:ntot] += np.eye(c_norb) * shell_level[2]
         emat_n[v1v2_norb:ntot, v1v2_norb:ntot] += np.eye(c_norb) * shell_level[2]
         if v2_name != 'empty':
             emat_i[v1_norb:v1v2_norb, v1_norb:v1v2_norb] += np.eye(v2_norb) * shell_level[1]
-            emat_i[v1_norb:v1v2_norb, v1_norb:v1v2_norb] += np.eye(v2_norb) * eval_shift
             emat_n[v1_norb:v1v2_norb, v1_norb:v1v2_norb] += np.eye(v2_norb) * shell_level[1]
 
     # external magnetic field
@@ -397,13 +397,13 @@ def _ed_1or2_valence_1core(
         emat_n[v1_norb:v1v2_norb, 0:v1_norb] += np.conj(np.transpose(hopping_v1v2))
 
     if rank == 0:
-        write_emat(emat_i, 'hopping_i.in')
+        _write_initial_integrals(emat_i, umat_i, v1v2_norb, v_tot_noccu)
         write_emat(emat_n, 'hopping_n.in')
         write_config(
             './', ed_solver, v1v2_norb, c_norb, neval, nvector, ncv, idump,
             maxiter=maxiter, min_ndim=min_ndim, eigval_tol=eigval_tol
         )
-        write_fock_dec_by_N(v1v2_norb, v_tot_noccu, "fock_i.in")
+        _write_fock_sector(v1v2_norb, v_tot_noccu, c_norb, "fock_i.in")
 
     if do_ed:
         # now, call ed solver
@@ -465,8 +465,8 @@ def _xas_1or2_valence_1core(
         print("edrixs >>> Running XAS ...", flush=True)
         write_config(num_val_orbs=v1v2_norb, num_core_orbs=c_norb,
                      num_gs=num_gs, nkryl=nkryl)
-        write_fock_dec_by_N(v1v2_norb, v_tot_noccu, "fock_i.in")
-        write_fock_dec_by_N(v1v2_norb, v_tot_noccu + 1, "fock_n.in")
+        _write_fock_sector(v1v2_norb, v_tot_noccu, c_norb, "fock_i.in")
+        _write_fock_sector(v1v2_norb, v_tot_noccu + 1, c_norb, "fock_n.in", core_hole=True)
 
     # Build transition operators in local-xyz axis
     if trans_to_which == 1:
@@ -599,9 +599,9 @@ def _rixs_1or2_valence_1core(
 
     if rank == 0:
         print("edrixs >>> Running RIXS ...", flush=True)
-        write_fock_dec_by_N(v1v2_norb, v_tot_noccu, "fock_i.in")
-        write_fock_dec_by_N(v1v2_norb, v_tot_noccu + 1, "fock_n.in")
-        write_fock_dec_by_N(v1v2_norb, v_tot_noccu, "fock_f.in")
+        _write_fock_sector(v1v2_norb, v_tot_noccu, c_norb, "fock_i.in")
+        _write_fock_sector(v1v2_norb, v_tot_noccu + 1, c_norb, "fock_n.in", core_hole=True)
+        _write_fock_sector(v1v2_norb, v_tot_noccu, c_norb, "fock_f.in")
 
         # Build transition operators in local-xyz axis
         if trans_to_which == 1:

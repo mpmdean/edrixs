@@ -145,12 +145,12 @@ This separation is important: physical arguments belong in the common interface;
 
 \subsection{Integer encoding}
 
-Many-body basis states are represented by the shared \texttt{FockBasis} class in \texttt{fock\_basis.py}.  A basis state is encoded as an integer bit pattern.  Orbital zero is stored as the most significant bit.
+Many-body basis states are represented by the shared \texttt{FockBasis} class in \texttt{fock\_basis.py}.  A basis state is encoded as an integer bit pattern.  Orbital zero is stored as the least significant bit, matching native Fortran.
 
 For a basis with \(N_{\mathrm{orb}}\) spin-orbitals, the bit for orbital \(i\) is
 
 \begin{equation}
-  b_i = 2^{N_{\mathrm{orb}}-1-i}.
+  b_i = 2^i.
 \end{equation}
 
 A set bit means that the corresponding spin-orbital is occupied.  \texttt{FockBasis.decode(j)} returns the integer state stored at many-body basis position \(j\), while \texttt{FockBasis.encode(state)} returns the matrix index of an integer-encoded state.
