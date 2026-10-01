@@ -110,14 +110,16 @@ def test_centered_petsc_spectra_match_scipy(ntrans, skip_gs, offset_i, offset_n)
                    thin=.4, phi=.2, backend_kws={'nkryl': 4})
     xpol = [('isotropic', 0), ('linear', .3), ('left', 0), ('right', 0)]
     expected = edrixs.xas(energies, vectors, hn, transitions, ominc,
-                          pol_type=xpol, **options)
+                          pol_type=xpol, backend='scipy', **options)
     actual = edrixs.xas(energies + offset_i, states, matrices[1], ops,
                         ominc + (offset_n - offset_i), pol_type=xpol, **options)
     assert_allclose(actual, expected, rtol=1e-10, atol=1e-11)
 
     options.update(gamma_f=np.linspace(.04, .06, len(eloss)), skip_gs=skip_gs,
                    pol_type=[('linear', .2, 'left', 0), ('right', 0, 'linear', .7)])
-    expected = edrixs.rixs(energies, vectors, hi, hn, transitions, ominc, eloss, **options)
+    expected = edrixs.rixs(
+        energies, vectors, hi, hn, transitions, ominc, eloss, backend='scipy', **options,
+    )
     actual, poles = edrixs.rixs(
         energies + offset_i, states, *matrices, ops, ominc + (offset_n - offset_i), eloss,
         return_poles=True, **options,

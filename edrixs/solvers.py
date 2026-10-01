@@ -35,6 +35,7 @@ from .poles import get_spectra_from_poles, merge_pole_dicts
 from .soc import atom_hsoc
 from .petsc_backend import petsc_backend
 from .scipy_backend import scipy_backend
+from .dense_backend import dense_backend
 from .fortran_backend import fortran_backend
 from ._solvers_helpers import (
     _ed_1or2_valence_1core,
@@ -102,7 +103,7 @@ def build_op(emat, umat, lb, rb=None, *, backend='scipy',
         case 'scipy':
             build_op_backend = scipy_backend.build_op_scipy
         case 'dense':
-            build_op_backend = scipy_backend.build_op_dense
+            build_op_backend = dense_backend.build_op_dense
         case 'petsc':
             build_op_backend = petsc_backend.build_op_petsc
         case 'fortran':
@@ -253,7 +254,7 @@ def ed(hmat_i, num_evals=1, *, shift=0.0, backend=None, backend_kws=None):
         case 'scipy':
             ed_backend = scipy_backend.ed_scipy
         case 'dense':
-            ed_backend = scipy_backend.ed_dense
+            ed_backend = dense_backend.ed_dense
         case 'petsc':
             ed_backend = petsc_backend.ed_petsc
         case 'fortran':
@@ -362,7 +363,7 @@ def xas(eval_i, evec_i, hmat_n, trans_op, ominc, *,
         case 'scipy':
             xas_backend = scipy_backend.xas_scipy
         case 'dense':
-            xas_backend = scipy_backend.xas_dense
+            xas_backend = dense_backend.xas_dense
         case 'petsc':
             xas_backend = petsc_backend.xas_petsc
         case 'fortran':
@@ -502,7 +503,7 @@ def rixs(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         case 'scipy':
             rixs_backend = scipy_backend.rixs_scipy
         case 'dense':
-            rixs_backend = scipy_backend.rixs_dense
+            rixs_backend = dense_backend.rixs_dense
         case 'petsc':
             rixs_backend = petsc_backend.rixs_petsc
         case 'fortran':

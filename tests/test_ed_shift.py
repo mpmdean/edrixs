@@ -60,12 +60,15 @@ def test_backend_centers_before_diagonalization_and_restores_energies(
     base = np.array([[1, 0.3j], [-0.3j, 2]], dtype=complex)
     full = base + shift * np.eye(2)
     operator = _operator(full, kind)
-    module = getattr(solvers, ('scipy' if backend == 'dense' else backend) + '_backend')
+    module = getattr(solvers, backend + '_backend')
     vectors = np.eye(2)
 
     def solver(centered, initial=None, **kwargs):
-        assert initial.shape == (2, 2)
-        assert kwargs['largest'] is False
+        if backend == 'dense':
+            assert kwargs == {'subset_by_index': None}
+        else:
+            assert initial.shape == (2, 2)
+            assert kwargs['largest'] is False
         assert centered is not operator
         assert_allclose(centered @ vectors, base)
         if kind == 'linear':
@@ -77,7 +80,10 @@ def test_backend_centers_before_diagonalization_and_restores_energies(
             assert_allclose(centered.rmatmat(block), base.conj().T @ block)
         return np.array([1., 2.]), vectors
 
-    monkeypatch.setattr(module, 'lobpcg', solver)
+    if backend == 'dense':
+        monkeypatch.setattr(module.scipy.linalg, 'eigh', solver)
+    else:
+        monkeypatch.setattr(module, 'lobpcg', solver)
     if kind == 'sparse':
         convert = module.aslinearoperator
 
@@ -130,7 +136,7 @@ def test_public_ed_passes_shift_and_hamiltonian_to_backend(backend, shift, monke
         assert kwargs == {'num_evals': 1, 'shift': shift, 'backend_kws': None}
         return result
 
-    module = getattr(solvers, ('scipy' if backend == 'dense' else backend) + '_backend')
+    module = getattr(solvers, backend + '_backend')
     monkeypatch.setattr(module, 'ed_' + backend, solver)
     assert edrixs.ed(operator, backend=backend, shift=shift) is result
 
