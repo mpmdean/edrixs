@@ -106,13 +106,13 @@ def test_zero_valence_native_limit(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('model,kwargs,nv,nc,nocc', [
     (edrixs.model_1v1c, dict(shell_name=('s', 'p'), v_noccu=1,
-                           shell_level=(0.3, -2)), 2, 6, 1),
+                             shell_level=(0.3, -2)), 2, 6, 1),
     (edrixs.model_2v1c, dict(shell_name=('s', 's', 'p'), v_tot_noccu=1,
-                           shell_level=(0.3, 0.4, -2)), 4, 6, 1),
+                             shell_level=(0.3, 0.4, -2)), 4, 6, 1),
     (edrixs.model_siam, dict(shell_name=('s', 'p'), nbath=1, v_noccu=1,
-                           c_level=-2), 4, 6, 1),
+                             c_level=-2), 4, 6, 1),
     (edrixs.model_siam_2d1p, dict(impurity_levels=np.zeros(5), bath_levels=np.zeros(5),
-                                hyb=np.zeros(5), Delta=2, nd=9), 20, 6, 19),
+                                  hyb=np.zeros(5), Delta=2, nd=9), 20, 6, 19),
 ])
 def test_model_full_shapes_core_blocks_and_sparse_agreement(model, kwargs, nv, nc, nocc):
     # Nonzero entries throughout the Slater list retain core-valence/core-core U.

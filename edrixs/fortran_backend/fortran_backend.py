@@ -2,7 +2,7 @@
 
 This code is currently a somewhat cumbersome bridge between the revised frontend
 and the older Fortran. In the longer term, the Fortran will either be edited to
-generate a cleaner interface, or the Fortran may be removed from the codebase. 
+generate a cleaner interface, or the Fortran may be removed from the codebase.
 
 The Fortran programs communicate exclusively through their conventional input
 and output files in the current working directory.  ``get_ops`` writes the whole

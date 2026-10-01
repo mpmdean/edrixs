@@ -13,7 +13,7 @@ from edrixs import solvers
 @pytest.mark.parametrize('model,kwargs,nc,core_level', [
     (edrixs.model_1v1c, dict(shell_name=('s', 'p'), shell_level=(0.2, 100)), 6, 100),
     (edrixs.model_2v1c, dict(shell_name=('s', 's', 'p'),
-                           shell_level=(0.2, 0.3, -100)), 6, -100),
+                             shell_level=(0.2, 0.3, -100)), 6, -100),
     (edrixs.model_siam, dict(shell_name=('s', 'p'), nbath=1, c_level=75), 6, 75),
 ])
 @pytest.mark.parametrize('sparse', [False, True])
@@ -92,6 +92,7 @@ def test_backend_centers_before_diagonalization_and_restores_energies(
             return convert(matrix)
 
         monkeypatch.setattr(module, 'aslinearoperator', check_sparse)
+
         def forbidden(*args, **kwargs):
             raise AssertionError('sparse Hamiltonian was densified')
         monkeypatch.setattr(sp.csr_matrix, 'toarray', forbidden)
