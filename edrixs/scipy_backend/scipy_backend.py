@@ -56,28 +56,7 @@ def ed_scipy(hmat_i, num_evals=1, *, shift=0.0, backend_kws=None):
     kws.update(validate_options('ed', backend_kws))
     blocksize = kws['blocksize']
     if shift != 0:
-        # Keep the original operator separate for the lazy shifted actions.
-        hamiltonian = hmat_i
-        if sp.issparse(hamiltonian):
-            hmat_i = hamiltonian - shift * sp.eye(
-                hamiltonian.shape[0], format='csr'
-            )
-        elif isinstance(hamiltonian, LinearOperator):
-            hmat_i = LinearOperator(
-                hamiltonian.shape,
-                matvec=lambda x: hamiltonian.matvec(x) - shift * x,
-                matmat=lambda x: hamiltonian.matmat(x) - shift * x,
-                rmatvec=lambda x: hamiltonian.rmatvec(x) - shift * x,
-                rmatmat=lambda x: hamiltonian.rmatmat(x) - shift * x,
-                dtype=np.result_type(hamiltonian.dtype, float),
-            )
-        else:
-            hamiltonian = np.asarray(hamiltonian)
-            hmat_i = np.array(
-                hamiltonian, dtype=np.result_type(hamiltonian.dtype, float),
-                copy=True,
-            )
-            hmat_i[np.diag_indices_from(hmat_i)] -= shift
+        hmat_i = _shift_hamiltonian(hmat_i, shift)
     hmat_i = aslinearoperator(hmat_i)
     if hmat_i.shape[0] != hmat_i.shape[1]:
         raise ValueError("hmat_i must be square")
@@ -137,6 +116,9 @@ def xas_scipy(
     tridiagonalization of the intermediate Hamiltonian generates the pole
     representation consumed by :func:`get_spectra_from_poles`.
 
+    The first incident energy and lowest retained energy set the internal
+    reference, keeping the intermediate Hamiltonian near zero on resonance.
+
     Parameters
     ----------
     eval_i : 1d array
@@ -185,9 +167,15 @@ def xas_scipy(
     """
     kws = validate_options('xas', backend_kws)
     nkryl = kws.get('nkryl', OPTIONS['xas']['nkryl'].default)
-    eval_i, evec_i, hmat_n, trans_op = _prepare_transition_inputs(
-        eval_i, evec_i, hmat_n, trans_op
+    eval_i, evec_i, trans_op = _prepare_transition_inputs(
+        eval_i, evec_i, trans_op
     )
+    ominc = np.asarray(ominc)
+    energy_ref = min(eval_i, default=0.0)
+    omega_ref = ominc[0] if len(ominc) else 0.0
+    hmat_n = aslinearoperator(_shift_hamiltonian(hmat_n, energy_ref, omega_ref))
+    eval_i = eval_i - energy_ref
+    ominc = ominc - omega_ref
     ntrans = len(trans_op)
 
     if pol_type is None:
@@ -253,6 +241,9 @@ def rixs_scipy(
     For each incident energy and polarization, collect the retained-state
     poles and evaluate their thermally weighted spectrum.
 
+    Hamiltonians are centered using the lowest retained energy and the first
+    incident energy. Returned poles retain the original absolute energies.
+
     Parameters
     ----------
     eval_i : 1d array
@@ -298,10 +289,14 @@ def rixs_scipy(
     """
     kws = {name: option.default for name, option in OPTIONS['rixs'].items()}
     kws.update(validate_options('rixs', backend_kws))
-    eval_i, evec_i, hmat_n, trans_op = _prepare_transition_inputs(
-        eval_i, evec_i, hmat_n, trans_op
+    eval_i, evec_i, trans_op = _prepare_transition_inputs(
+        eval_i, evec_i, trans_op
     )
-    hmat_i = aslinearoperator(hmat_i)
+    energy_ref = min(eval_i, default=0.0)
+    omega_ref = ominc[0] if len(ominc) else 0.0
+    hmat_i = aslinearoperator(_shift_hamiltonian(hmat_i, energy_ref))
+    hmat_n = aslinearoperator(_shift_hamiltonian(hmat_n, energy_ref, omega_ref))
+    eval_relative = eval_i - energy_ref
     trans_op_H = [operator.H for operator in trans_op]
     if pol_type is None:
         pol_type = [('linear', 0, 'linear', 0)]
@@ -343,13 +338,13 @@ def rixs_scipy(
             poles = {
                 'eigval': [], 'npoles': [], 'norm': [], 'alpha': [], 'beta': [],
             }
-            for initial_index, energy in enumerate(eval_i):
+            for initial_index, energy in enumerate(eval_relative):
                 rhs = _apply_linear_combination(
                     trans_op, polvec_i, evec_i[:, initial_index]
                 )
                 alpha, beta, norm = np.array([0.0]), np.array([]), 0.0
                 if np.linalg.norm(rhs) != 0:
-                    shift = omega + energy + 1j * gamma_core[incident_index]
+                    shift = (omega - omega_ref) + energy + 1j * gamma_core[incident_index]
                     linear_system = LinearOperator(
                         hmat_n.shape,
                         matvec=lambda v, z=shift: z * v - hmat_n @ v,
@@ -384,6 +379,12 @@ def rixs_scipy(
                 get_spectra_from_poles(poles, eloss, gamma_final, temperature)
             )
             if return_poles:
+                # Restore absolute energies only after evaluating the spectrum.
+                poles['eigval'] = list(eval_i)
+                poles['alpha'] = [
+                    alpha + energy_ref if norm != 0 else alpha
+                    for alpha, norm in zip(poles['alpha'], poles['norm'])
+                ]
                 incident_poles.append(poles)
         if return_poles:
             poles_all.append(incident_poles)
@@ -639,6 +640,41 @@ def build_op_scipy(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None
 # -----------------------------------------------------------------------------
 
 
+def _shift_hamiltonian(hamiltonian, *shifts):
+    """Subtract real offsets before matvecs, without modifying the input.
+
+    Subtract offsets separately to preserve a small photon-energy correction
+    beside a large common energy. Opaque LinearOperators must shift lazily;
+    their original matvec can still lose precision through cancellation.
+    """
+    if isinstance(hamiltonian, LinearOperator):
+        identity = LinearOperator(
+            hamiltonian.shape, dtype=float,
+            matvec=lambda x: x, rmatvec=lambda x: x,
+            matmat=lambda x: x, rmatmat=lambda x: x,
+        )
+        for shift in shifts:
+            hamiltonian = hamiltonian - shift * identity
+        return hamiltonian
+    if sp.issparse(hamiltonian):
+        result = sp.csr_matrix(
+            hamiltonian, dtype=np.result_type(hamiltonian.dtype, float), copy=True
+        )
+        diagonal = result.diagonal()
+        for shift in shifts:
+            diagonal -= shift
+        result.setdiag(diagonal)
+        return result
+    hamiltonian = np.asarray(hamiltonian)
+    result = np.array(
+        hamiltonian, dtype=np.result_type(hamiltonian.dtype, float), copy=True
+    )
+    indices = np.diag_indices_from(result)
+    for shift in shifts:
+        result[indices] -= shift
+    return result
+
+
 def _apply_linear_combination(operators, coefficients, vector):
     """
     Apply sum_i coeffs[i] ops[i] to vec without constructing the summed operator.
@@ -654,11 +690,10 @@ def _apply_linear_combination(operators, coefficients, vector):
     return result
 
 
-def _prepare_transition_inputs(eval_i, evec_i, hmat_n, trans_op):
+def _prepare_transition_inputs(eval_i, evec_i, trans_op):
     """Normalize XAS/RIXS inputs and check state and component counts."""
     eval_i = np.asarray(eval_i)
     evec_i = np.asarray(evec_i)
-    hmat_n = aslinearoperator(hmat_n)
     trans_op = [aslinearoperator(operator) for operator in trans_op]
 
     if eval_i.ndim != 1:
@@ -671,7 +706,7 @@ def _prepare_transition_inputs(eval_i, evec_i, hmat_n, trans_op):
         raise ValueError(
             "len(trans_op) must be 3 for dipole or 5 for quadrupole transitions"
         )
-    return eval_i, evec_i, hmat_n, trans_op
+    return eval_i, evec_i, trans_op
 
 
 def _xas_poles_from_start_vectors(eval_i, start_vectors, hmat_n, *, nkryl):

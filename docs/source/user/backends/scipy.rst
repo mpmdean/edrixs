@@ -20,6 +20,16 @@ XAS and RIXS use EDRIXS's Lanczos routines, and the RIXS correction-vector
 step uses SciPy's
 `GMRES solver <https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.gmres.html>`__.
 
+XAS and RIXS use the lowest retained initial energy and the first incident
+energy as internal references. Assuming the incident grid is near resonance,
+this centers the intermediate Hamiltonian; RIXS also centers the final
+Hamiltonian on the initial energy. Dense and sparse diagonals are shifted
+before matrix-vector multiplication, without changing the input operators.
+The public energy grids and returned RIXS pole energies retain their original
+reference. Spectra are evaluated before restoring the pole energies.
+For a custom ``LinearOperator``, shifting is necessarily applied after its
+matrix-vector product and cannot recover precision lost inside that product.
+
 Options are specific to the stage where they are supplied.
 
 ``build_op`` and ``get_ops``
