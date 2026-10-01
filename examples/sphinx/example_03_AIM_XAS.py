@@ -98,15 +98,6 @@ slater = ([F0_dd, F2_dd, F4_dd],  # initial
 Delta = 4.7
 
 ################################################################################
-# The wrapper recovers U_dd and U_dp from the Slater integrals and calls
-# :func:`~edrixs.utils.CT_imp_bath` and
-# :func:`~edrixs.utils.CT_imp_bath_core_hole` internally. These determine the
-# initial and intermediate shell centers using the same Delta. The initial
-# reference is :math:`E(d^{n_d}L^{10})=0`; the core-hole helper additionally
-# uses :math:`E(d^{n_d}L^{10}p^6)=0` and
-# :math:`E(d^{n_d+1}L^{10}p^5)=0` to determine the core energy.
-
-################################################################################
 # Orbital energies and hybridization
 # ------------------------------------------------------------------------------
 # Supply five real-harmonic orbital energies in the order
