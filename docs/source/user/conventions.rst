@@ -41,11 +41,16 @@ Energies and naming
 Shells
 ======
 
-The standard model constructors omit the filled, inactive core shell from the
-initial-state basis. The intermediate-state basis explicitly includes the core
-shell with one electron removed and the valence sector with one additional
-electron. For SIAM models, the valence sector includes both impurity and bath
-orbitals. The energies of the different states need to be set with this in mind.
+The revised EDRIXS model constructors now follow the convention of including
+the core orbitals in the initial Fock space. Since these are all full, this
+does not increase the number of different states. It is simply a relabeling.
+This convention avoids us having to introduce artificial energy shifts coming
+from emitting these filled core orbitals. It also makes constructing
+transition operators simpler and more natural. Model constructors now provide
+a value called `shift`, which shifts the diagonal energy of the matrices ahead
+of linear algebra operations and then adds it back afterwards. This makes
+no difference to the physics but reduces the change of possible numerical
+issues coming from subtracting two large numbers 
 
 Default orbital ordering and single-particle bases
 ==================================================
