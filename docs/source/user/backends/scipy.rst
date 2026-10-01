@@ -26,6 +26,16 @@ but otherwise uses the same solver adapters and keyword options as ``scipy``.
 Because it stores every matrix element, it is most useful for small problems;
 the sparse or matrix-free forms avoid that dense storage cost.
 
+XAS and RIXS use the lowest retained initial energy and the first incident
+energy as internal references. Assuming the incident grid is near resonance,
+this centers the intermediate Hamiltonian; RIXS also centers the final
+Hamiltonian on the initial energy. Dense and sparse diagonals are shifted
+before matrix-vector multiplication, without changing the input operators.
+The public energy grids and returned RIXS pole energies retain their original
+reference. Spectra are evaluated before restoring the pole energies.
+For a custom ``LinearOperator``, shifting is necessarily applied after its
+matrix-vector product and cannot recover precision lost inside that product.
+
 Options are specific to the stage where they are supplied.
 
 ``build_op`` and ``get_ops``

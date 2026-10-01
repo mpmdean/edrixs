@@ -42,6 +42,12 @@ see PETSc's `matrix type overview
 ``ed``
 ======
 
+Pass the final model output as ``ed(hmat_i, shift=shift)`` to subtract the
+filled-core shell energy from a copy of the distributed Hamiltonian before
+diagonalization. Returned eigenvalues retain the original energy reference.
+Shifted solves use an absolute residual tolerance so eigenvalues near zero
+remain well conditioned.
+
 .. backend-options:: petsc ed
 
 The eigensolver uses SLEPc ``EPS`` with a Hermitian problem type and requests
@@ -51,6 +57,12 @@ by `EPS.setDimensions
 
 ``xas``
 =======
+
+XAS and RIXS center distributed matrix copies using the lowest retained initial
+energy and the first incident energy, which should lie near resonance. RIXS
+also centers the final Hamiltonian. Spectra are evaluated on these relative
+energies before restoring the original reference in returned pole dictionaries.
+Input matrices are unchanged.
 
 .. backend-options:: petsc xas
 
