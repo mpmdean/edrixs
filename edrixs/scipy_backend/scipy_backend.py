@@ -278,7 +278,9 @@ def rixs_scipy(
     backend_kws : mapping, optional
         ``nkryl`` sets the final-state Lanczos dimension. ``linsys_tol``,
         ``linsys_maxiter``, and ``linsys_restart`` control the intermediate
-        GMRES correction-vector solve.
+        GMRES correction-vector solve. ``linsys_tol`` sets the relative
+        tolerance (``rtol``, or ``tol`` in older SciPy). When the ``rtol``
+        API is available, the absolute tolerance ``atol`` is set to zero.
 
     Returns
     -------

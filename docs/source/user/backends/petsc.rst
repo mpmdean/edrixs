@@ -45,8 +45,10 @@ see PETSc's `matrix type overview
 Pass the final model output as ``ed(hmat_i, shift=shift)`` to subtract the
 filled-core shell energy from a copy of the distributed Hamiltonian before
 diagonalization. Returned eigenvalues retain the original energy reference.
-Shifted solves use an absolute residual tolerance so eigenvalues near zero
-remain well conditioned.
+With a nonzero ``shift``, ``eigval_tol`` is an absolute residual tolerance for
+the shifted problem, avoiding division by a near-zero centered eigenvalue.
+With ``shift=0``, it is a relative residual tolerance, scaled by the eigenvalue
+magnitude.
 
 .. backend-options:: petsc ed
 
@@ -70,6 +72,15 @@ Input matrices are unchanged.
 ========
 
 .. backend-options:: petsc rixs
+
+``linsys_tol`` sets KSP's absolute tolerance, ``atol``. The relative tolerance
+remains at PETSc's default unless overridden through its options database;
+the solver can therefore converge through the relative criterion before
+reaching the absolute tolerance.
+
+EDRIXS calls KSP's ``setFromOptions()`` after applying ``backend_kws``.
+Corresponding PETSc options-database entries, such as ``ksp_atol``, ``ksp_rtol``,
+``ksp_max_it``, and ``ksp_type``, take precedence over these settings.
 
 ``ksp_type`` accepts a PETSc KSP type such as ``'gmres'``; the available
 algorithms and their tradeoffs are listed in the `KSP solver table

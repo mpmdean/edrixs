@@ -54,3 +54,7 @@ eigensolver tolerance accepted by ``ed``.
 ========
 
 .. backend-options:: scipy rixs
+
+``linsys_tol`` sets GMRES's relative tolerance, passed as ``rtol`` (or ``tol``
+in older SciPy). With the ``rtol`` API, EDRIXS sets the absolute tolerance
+``atol`` to zero.

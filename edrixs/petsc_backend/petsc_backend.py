@@ -148,11 +148,13 @@ def ed_petsc(hmat_i, num_evals=1, *, shift=0.0, backend_kws=None):
     shift : float, optional
         Real offset subtracted before diagonalization and restored to the
         returned eigenvalues. The supplied distributed matrix is not modified.
-        Shifted solves use an absolute residual tolerance.
+        A nonzero shift selects an absolute residual tolerance; with zero
+        shift the residual tolerance is relative to the eigenvalue magnitude.
     backend_kws : mapping, optional
         Extra options. Recognized keys:
 
-        - ``eigval_tol`` : convergence tolerance (default ``1e-8``).
+        - ``eigval_tol`` : residual tolerance (default ``1e-8``), relative
+          when ``shift`` is zero and absolute otherwise.
         - ``maxiter`` : maximum solver iterations (default ``1000``).
         - ``ncv`` : number of column vectors (Krylov subspace size).
         - ``verbose`` : print convergence diagnostics (default ``False``).
@@ -543,9 +545,14 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         Extra options. Recognized keys:
 
         - ``nkryl`` : maximum final-state Lanczos dimension (default ``200``).
-        - ``linsys_tol`` : KSP absolute tolerance (default ``1e-10``).
+        - ``linsys_tol`` : KSP absolute tolerance ``atol`` (default ``1e-10``).
+          The relative tolerance remains at PETSc's default unless overridden
+          through its options database.
         - ``linsys_maxiter`` : maximum KSP iterations (default ``1000``).
         - ``ksp_type`` : KSP method (default ``'gmres'``).
+
+        KSP ``setFromOptions()`` is called after applying these settings.
+        Corresponding PETSc options-database entries override ``backend_kws``.
 
     Returns
     -------
