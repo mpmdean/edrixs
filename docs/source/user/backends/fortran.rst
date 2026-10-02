@@ -63,6 +63,3 @@ must be at least the later ``num_gs`` value.  ``nvector`` cannot exceed
 ========
 
 .. backend-options:: fortran rixs
-
-``linsys_max`` sets the maximum number of linear-solver iterations, matching
-the native Fortran namelist field and the legacy Fortran function argument.
