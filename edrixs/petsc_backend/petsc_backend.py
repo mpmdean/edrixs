@@ -19,119 +19,6 @@ __all__ = [
 ]
 
 
-def _petsc_module():
-    """
-    Import petsc4py lazily and return its PETSc module.
-    """
-    try:
-        from petsc4py import PETSc
-    except ImportError as exc:
-        raise ImportError(
-            "The PETSc backend requires petsc4py and a working PETSc installation"
-        ) from exc
-    return PETSc
-
-
-def _slepc_module():
-    """
-    Import slepc4py lazily and return its SLEPc module.
-    """
-    try:
-        from slepc4py import SLEPc
-    except ImportError as exc:
-        raise ImportError(
-            "The PETSc backend eigensolver requires slepc4py and a working "
-            "SLEPc installation"
-        ) from exc
-    return SLEPc
-
-
-def owns_operator_petsc(operator):
-    """
-    Return whether ``operator`` is a petsc4py matrix or linear operator.
-    """
-    try:
-        PETSc = _petsc_module()
-    except ImportError:
-        return False
-    return isinstance(operator, (PETSc.Mat, PETSc.Vec))
-
-
-# -----------------------------------------------------------------------------
-# Many-body operator construction
-# -----------------------------------------------------------------------------
-
-
-def build_op_petsc(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
-    """Build a distributed PETSc many-body operator.
-
-    Assemble ``H = sum_ij emat_ij f_i^dagger f_j
-    + sum_lkji umat_lkji f_l^dagger f_k^dagger f_j f_i`` in the Fock basis
-    ``lb`` (rows) and ``rb`` (columns). For a square operator omit ``rb``;
-    ``lb`` is then used on both sides. For a rectangular transition operator
-    ``rb`` is the column (right) basis and ``lb`` is the row (left) basis.
-
-    Parameters
-    ----------
-    emat : 2d complex array or None
-        One-body coefficients. ``None`` skips the one-body term.
-    umat : 4d complex array or None
-        Two-body Coulomb tensor. ``None`` skips the two-body term.
-    lb : FockBasis
-        Left (row) many-body basis.
-    rb : FockBasis, optional
-        Right (column) many-body basis. Defaults to ``lb``.
-    use_numba : bool, optional
-        JIT-compile matrix-entry construction. The default is False.
-    backend_kws : mapping, optional
-        Extra options. Recognized keys:
-
-        - ``comm`` : PETSc communicator (default ``PETSc.COMM_WORLD``).
-        - ``tol_e`` : threshold for retaining ``emat`` entries.
-        - ``tol_u`` : threshold for retaining ``umat`` entries.
-        - ``nnz_guess_per_row`` : preallocation hint.
-        - ``mat_type`` : optional PETSc matrix type to convert to after
-          assembly, e.g. ``'aijcusparse'``.
-        - ``assembly_chunk_cols`` : number of owned basis columns generated
-          before entries are flushed into PETSc (default ``4096``).
-
-    Returns
-    -------
-    petsc4py.PETSc.Mat
-        The assembled many-body operator.
-    """
-    kws = validate_options('build_op', backend_kws)
-    PETSc = _petsc_module()
-    from .hash_basis_methods import build_op_petsc_matrix
-
-    comm = kws.pop('comm', PETSc.COMM_WORLD)
-    tol_e = kws.pop('tol_e', OPTIONS['build_op']['tol_e'].default)
-    tol_u = kws.pop('tol_u', OPTIONS['build_op']['tol_u'].default)
-    nnz_guess_per_row = kws.pop(
-        'nnz_guess_per_row', OPTIONS['build_op']['nnz_guess_per_row'].default
-    )
-    mat_type = kws.pop('mat_type', OPTIONS['build_op']['mat_type'].default)
-    assembly_chunk_cols = kws.pop(
-        'assembly_chunk_cols', OPTIONS['build_op']['assembly_chunk_cols'].default
-    )
-
-    return build_op_petsc_matrix(
-        emat, umat, lb, rb,
-        comm=comm,
-        tol_e=tol_e,
-        tol_u=tol_u,
-        nnz_guess_per_row=nnz_guess_per_row,
-        mat_type=mat_type,
-        assembly_chunk_cols=assembly_chunk_cols,
-        use_numba=use_numba,
-    )
-
-
-# -----------------------------------------------------------------------------
-# Exact diagonalization (SLEPc)
-# -----------------------------------------------------------------------------
-
-
 def ed_petsc(hmat_i, num_evals=1, *, shift=0.0, backend_kws=None):
     """Obtain the lowest-lying eigenpairs with SLEPc/PETSc.
 
@@ -237,113 +124,6 @@ def ed_petsc(hmat_i, num_evals=1, *, shift=0.0, backend_kws=None):
         eps.destroy()
         if shift != 0:
             centered.destroy()
-
-
-# -----------------------------------------------------------------------------
-# Spectroscopy helpers
-# -----------------------------------------------------------------------------
-
-
-def _rixs_polarization_vectors(
-        ntrans, thin, thout, phi, incoming_kind, alpha,
-        outgoing_kind, beta, scatter_axis):
-    """
-    Return incoming and outgoing polarization vectors in transition-operator space.
-    """
-    from ..photon_transition import (
-        dipole_polvec_rixs, quadrupole_polvec, unit_wavevector,
-    )
-
-    incoming, outgoing = dipole_polvec_rixs(
-        thin, thout, phi, alpha, beta, scatter_axis,
-        (incoming_kind, outgoing_kind),
-    )
-
-    incoming_vector = np.zeros(ntrans, dtype=complex)
-    outgoing_vector = np.zeros(ntrans, dtype=complex)
-    if ntrans == 3:
-        incoming_vector[:] = incoming
-        outgoing_vector[:] = outgoing
-    elif ntrans == 5:
-        incoming_wavevector = unit_wavevector(
-            thin, phi, scatter_axis, direction='in'
-        )
-        outgoing_wavevector = unit_wavevector(
-            thout, phi, scatter_axis, direction='out'
-        )
-        incoming_vector[:] = quadrupole_polvec(incoming, incoming_wavevector)
-        outgoing_vector[:] = quadrupole_polvec(outgoing, outgoing_wavevector)
-    else:
-        raise ValueError("ntrans must be 3 or 5")
-    return incoming_vector, outgoing_vector
-
-
-def _apply_trans_combination(operators, coefficients, vector):
-    """
-    Apply ``sum_k coeff[k] * operators[k] @ vector`` (initial -> intermediate).
-    """
-    result = None
-    for coefficient, operator in zip(coefficients, operators):
-        if coefficient == 0:
-            continue
-        term = operator.createVecLeft()
-        operator.mult(vector, term)
-        term.scale(coefficient)
-        if result is None:
-            result = term
-        else:
-            result.axpy(1.0, term)
-    if result is None:
-        result = operators[0].createVecLeft()
-        result.zeroEntries()
-    return result
-
-
-def _apply_trans_combination_adjoint(operators, coefficients, vector):
-    """
-    Apply ``sum_k coeff[k] * operators[k]^H @ vector`` (intermediate -> initial).
-    """
-    result = None
-    for coefficient, operator in zip(coefficients, operators):
-        if coefficient == 0:
-            continue
-        term = operator.createVecRight()
-        operator.multHermitian(vector, term)
-        term.scale(coefficient)
-        if result is None:
-            result = term
-        else:
-            result.axpy(1.0, term)
-    if result is None:
-        result = operators[0].createVecRight()
-        result.zeroEntries()
-    return result
-
-
-def _xas_pole_dict(hmat_n, seeds, eval_i, nkryl, lanczos_tridiagonal):
-    """
-    Build an EDRIXS-compatible XAS pole dictionary from seed vectors.
-
-    ``seeds[k]`` is the transition-operator-applied initial state associated
-    with energy ``eval_i[k]`` and living in the intermediate Hilbert space.
-    """
-    pole_dict = {'npoles': [], 'eigval': [], 'norm': [],
-                 'alpha': [], 'beta': []}
-    for energy, seed in zip(eval_i, seeds):
-        if seed.norm() == 0:
-            alpha_i = np.array([0.0], dtype=float)
-            beta_i = np.array([], dtype=float)
-            norm_i = 0.0
-        else:
-            alpha_i, beta_i, norm_i = lanczos_tridiagonal(
-                hmat_n, seed, nkryl=nkryl
-            )
-        pole_dict['npoles'].append(len(alpha_i))
-        pole_dict['eigval'].append(float(energy))
-        pole_dict['norm'].append(norm_i)
-        pole_dict['alpha'].append(alpha_i)
-        pole_dict['beta'].append(beta_i)
-    return pole_dict
 
 
 def xas_petsc(eval_i, evec_i, hmat_n, trans_op, ominc, *,
@@ -500,12 +280,15 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
                skip_gs=False, return_poles=False, backend_kws=None):
     """Calculate RIXS with the PETSc Krylov correction-vector solver.
 
-    For every incident energy, polarization, and retained initial state, the
-    intermediate correction vector is obtained by solving the shifted linear
+    For every incident energy, distinct incoming polarization, and retained
+    initial state, the intermediate correction vector solves the shifted linear
     system ``(omega + E_i + i*gamma_c - H_n) x = D_k |i>`` with a PETSc KSP
     (GMRES), and a Lanczos tridiagonalization of ``hmat_i`` seeded by
     ``D_k'^dagger x`` produces the pole representation consumed by
     :func:`edrixs.poles.get_spectra_from_poles`.
+
+    Outgoing channels with identical incoming coefficients share the correction
+    vector, but retain separate final-state Lanczos calculations and poles.
 
     The lowest initial energy and first incident energy center internal
     matrix copies near resonance. Input matrices and public energy references
@@ -565,7 +348,7 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
     PETSc = _petsc_module()
     from .lanczos import lanczos_tridiagonal
     from ..poles import get_spectra_from_poles
-    from .._solvers_helpers import _expand_broadening
+    from .._solvers_helpers import _expand_broadening, _group_rixs_incoming
 
     nkryl = int(kws.pop('nkryl', OPTIONS['rixs']['nkryl'].default))
     linsys_tol = float(
@@ -611,6 +394,7 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         )
         for incoming_kind, alpha, outgoing_kind, beta in pol_type
     ]
+    incoming_groups = _group_rixs_incoming(polarizations)
 
     energy_ref = min(eval_i, default=0.0)
     omega_ref = ominc[0] if n_om else 0.0
@@ -632,51 +416,69 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         rixs = np.zeros((n_om, neloss, len(pol_type)), dtype=float)
         poles = []
         for iom, omega in enumerate(ominc):
-            poles_per_om = []
-            for ip, (polvec_i, polvec_f) in enumerate(polarizations):
-                pole_dict = {'npoles': [], 'eigval': [], 'norm': [],
-                             'alpha': [], 'beta': []}
-                for ig in range(num_gs):
-                    z = (omega - omega_ref) + relative_evals[ig] + 1j * gamma_core[iom]
+            poles_per_om = [
+                {'npoles': [], 'eigval': [], 'norm': [], 'alpha': [], 'beta': []}
+                for _ in polarizations
+            ]
+            for ig in range(num_gs):
+                if not incoming_groups:
+                    continue
+                z = (omega - omega_ref) + relative_evals[ig] + 1j * gamma_core[iom]
 
-                    # A = z*I - H_n
-                    shifted.zeroEntries()
-                    shifted.axpy(-1.0, centered_n,
-                                 structure=PETSc.Mat.Structure.SAME_NONZERO_PATTERN)
-                    shifted.shift(z)
-                    ksp.setOperators(shifted)
+                # The shifted operator depends on energy/state, not polarization.
+                shifted.zeroEntries()
+                shifted.axpy(-1.0, centered_n,
+                             structure=PETSc.Mat.Structure.SAME_NONZERO_PATTERN)
+                shifted.shift(z)
+                ksp.setOperators(shifted)
 
+                for polvec_i, channels in incoming_groups:
                     # RHS: D_k |i>  (initial -> intermediate)
                     rhs = _apply_trans_combination(trans_op, polvec_i, evec_i[ig])
-                    sol = rhs.duplicate()
-                    sol.zeroEntries()
-                    ksp.solve(rhs, sol)
-                    if ksp.getConvergedReason() < 0:
-                        raise RuntimeError(
-                            "KSP did not converge for omega={}, ig={}: reason={}".format(
-                                omega, ig, ksp.getConvergedReason()
-                            )
-                        )
+                    sol = None
+                    try:
+                        # Vec.norm is collective: every rank takes the same branch.
+                        if rhs.norm() != 0:
+                            sol = rhs.duplicate()
+                            sol.zeroEntries()
+                            ksp.solve(rhs, sol)
+                            if ksp.getConvergedReason() < 0:
+                                raise RuntimeError(
+                                    "KSP did not converge for omega={}, ig={}: reason={}".format(
+                                        omega, ig, ksp.getConvergedReason()
+                                    )
+                                )
 
-                    # Final-state seed: D_k'^dagger x  (intermediate -> initial)
-                    seed = _apply_trans_combination_adjoint(
-                        trans_op, np.conj(polvec_f), sol
-                    )
+                        for ip, polvec_f in channels:
+                            alpha_i, beta_i, norm_i = np.array([0.0]), np.array([]), 0.0
+                            if sol is not None:
+                                # Emission and projection never modify the shared solution.
+                                seed = _apply_trans_combination_adjoint(
+                                    trans_op, np.conj(polvec_f), sol
+                                )
+                                try:
+                                    if skip_gs:
+                                        for gs_vec in evec_i:
+                                            # PETSc dot conjugates its second argument.
+                                            seed.axpy(-seed.dot(gs_vec), gs_vec)
+                                    alpha_i, beta_i, norm_i = lanczos_tridiagonal(
+                                        centered_i, seed, nkryl=nkryl
+                                    )
+                                finally:
+                                    seed.destroy()
 
-                    if skip_gs:
-                        for gs_vec in evec_i:
-                            # PETSc dot conjugates its second argument.
-                            seed.axpy(-seed.dot(gs_vec), gs_vec)
+                            pole_dict = poles_per_om[ip]
+                            pole_dict['npoles'].append(len(alpha_i))
+                            pole_dict['eigval'].append(relative_evals[ig])
+                            pole_dict['norm'].append(norm_i)
+                            pole_dict['alpha'].append(alpha_i)
+                            pole_dict['beta'].append(beta_i)
+                    finally:
+                        if sol is not None:
+                            sol.destroy()
+                        rhs.destroy()
 
-                    alpha_i, beta_i, norm_i = lanczos_tridiagonal(
-                        centered_i, seed, nkryl=nkryl
-                    )
-                    pole_dict['npoles'].append(len(alpha_i))
-                    pole_dict['eigval'].append(relative_evals[ig])
-                    pole_dict['norm'].append(norm_i)
-                    pole_dict['alpha'].append(alpha_i)
-                    pole_dict['beta'].append(beta_i)
-
+            for ip, pole_dict in enumerate(poles_per_om):
                 rixs[iom, :, ip] = get_spectra_from_poles(
                     pole_dict, eloss, gamma_final, temperature
                 )
@@ -686,7 +488,6 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
                         alpha + energy_ref if norm != 0 else alpha
                         for alpha, norm in zip(pole_dict['alpha'], pole_dict['norm'])
                     ]
-                    poles_per_om.append(pole_dict)
             if return_poles:
                 poles.append(poles_per_om)
 
@@ -696,3 +497,218 @@ def rixs_petsc(eval_i, evec_i, hmat_i, hmat_n, trans_op, ominc, eloss, *,
         shifted.destroy()
         centered_n.destroy()
         centered_i.destroy()
+
+
+def owns_operator_petsc(operator):
+    """
+    Return whether ``operator`` is a petsc4py matrix or linear operator.
+    """
+    try:
+        PETSc = _petsc_module()
+    except ImportError:
+        return False
+    return isinstance(operator, (PETSc.Mat, PETSc.Vec))
+
+
+# -----------------------------------------------------------------------------
+# Many-body operator construction
+# -----------------------------------------------------------------------------
+
+
+def build_op_petsc(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
+    """Build a distributed PETSc many-body operator.
+
+    Assemble ``H = sum_ij emat_ij f_i^dagger f_j
+    + sum_lkji umat_lkji f_l^dagger f_k^dagger f_j f_i`` in the Fock basis
+    ``lb`` (rows) and ``rb`` (columns). For a square operator omit ``rb``;
+    ``lb`` is then used on both sides. For a rectangular transition operator
+    ``rb`` is the column (right) basis and ``lb`` is the row (left) basis.
+
+    Parameters
+    ----------
+    emat : 2d complex array or None
+        One-body coefficients. ``None`` skips the one-body term.
+    umat : 4d complex array or None
+        Two-body Coulomb tensor. ``None`` skips the two-body term.
+    lb : FockBasis
+        Left (row) many-body basis.
+    rb : FockBasis, optional
+        Right (column) many-body basis. Defaults to ``lb``.
+    use_numba : bool, optional
+        JIT-compile matrix-entry construction. The default is False.
+    backend_kws : mapping, optional
+        Extra options. Recognized keys:
+
+        - ``comm`` : PETSc communicator (default ``PETSc.COMM_WORLD``).
+        - ``tol_e`` : threshold for retaining ``emat`` entries.
+        - ``tol_u`` : threshold for retaining ``umat`` entries.
+        - ``nnz_guess_per_row`` : preallocation hint.
+        - ``mat_type`` : optional PETSc matrix type to convert to after
+          assembly, e.g. ``'aijcusparse'``.
+        - ``assembly_chunk_cols`` : number of owned basis columns generated
+          before entries are flushed into PETSc (default ``4096``).
+
+    Returns
+    -------
+    petsc4py.PETSc.Mat
+        The assembled many-body operator.
+    """
+    kws = validate_options('build_op', backend_kws)
+    PETSc = _petsc_module()
+    from .hash_basis_methods import build_op_petsc_matrix
+
+    comm = kws.pop('comm', PETSc.COMM_WORLD)
+    tol_e = kws.pop('tol_e', OPTIONS['build_op']['tol_e'].default)
+    tol_u = kws.pop('tol_u', OPTIONS['build_op']['tol_u'].default)
+    nnz_guess_per_row = kws.pop(
+        'nnz_guess_per_row', OPTIONS['build_op']['nnz_guess_per_row'].default
+    )
+    mat_type = kws.pop('mat_type', OPTIONS['build_op']['mat_type'].default)
+    assembly_chunk_cols = kws.pop(
+        'assembly_chunk_cols', OPTIONS['build_op']['assembly_chunk_cols'].default
+    )
+
+    return build_op_petsc_matrix(
+        emat, umat, lb, rb,
+        comm=comm,
+        tol_e=tol_e,
+        tol_u=tol_u,
+        nnz_guess_per_row=nnz_guess_per_row,
+        mat_type=mat_type,
+        assembly_chunk_cols=assembly_chunk_cols,
+        use_numba=use_numba,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Solver helpers
+# -----------------------------------------------------------------------------
+
+
+def _petsc_module():
+    """
+    Import petsc4py lazily and return its PETSc module.
+    """
+    try:
+        from petsc4py import PETSc
+    except ImportError as exc:
+        raise ImportError(
+            "The PETSc backend requires petsc4py and a working PETSc installation"
+        ) from exc
+    return PETSc
+
+
+def _slepc_module():
+    """
+    Import slepc4py lazily and return its SLEPc module.
+    """
+    try:
+        from slepc4py import SLEPc
+    except ImportError as exc:
+        raise ImportError(
+            "The PETSc backend eigensolver requires slepc4py and a working "
+            "SLEPc installation"
+        ) from exc
+    return SLEPc
+
+
+def _rixs_polarization_vectors(
+        ntrans, thin, thout, phi, incoming_kind, alpha,
+        outgoing_kind, beta, scatter_axis):
+    """
+    Return incoming and outgoing polarization vectors in transition-operator space.
+    """
+    from ..photon_transition import (
+        dipole_polvec_rixs, quadrupole_polvec, unit_wavevector,
+    )
+
+    incoming, outgoing = dipole_polvec_rixs(
+        thin, thout, phi, alpha, beta, scatter_axis,
+        (incoming_kind, outgoing_kind),
+    )
+
+    incoming_vector = np.zeros(ntrans, dtype=complex)
+    outgoing_vector = np.zeros(ntrans, dtype=complex)
+    if ntrans == 3:
+        incoming_vector[:] = incoming
+        outgoing_vector[:] = outgoing
+    elif ntrans == 5:
+        incoming_wavevector = unit_wavevector(
+            thin, phi, scatter_axis, direction='in'
+        )
+        outgoing_wavevector = unit_wavevector(
+            thout, phi, scatter_axis, direction='out'
+        )
+        incoming_vector[:] = quadrupole_polvec(incoming, incoming_wavevector)
+        outgoing_vector[:] = quadrupole_polvec(outgoing, outgoing_wavevector)
+    else:
+        raise ValueError("ntrans must be 3 or 5")
+    return incoming_vector, outgoing_vector
+
+
+def _apply_trans_combination(operators, coefficients, vector):
+    """
+    Apply ``sum_k coeff[k] * operators[k] @ vector`` (initial -> intermediate).
+    """
+    result = None
+    for coefficient, operator in zip(coefficients, operators):
+        if coefficient == 0:
+            continue
+        term = operator.createVecLeft()
+        operator.mult(vector, term)
+        term.scale(coefficient)
+        if result is None:
+            result = term
+        else:
+            result.axpy(1.0, term)
+    if result is None:
+        result = operators[0].createVecLeft()
+        result.zeroEntries()
+    return result
+
+
+def _apply_trans_combination_adjoint(operators, coefficients, vector):
+    """
+    Apply ``sum_k coeff[k] * operators[k]^H @ vector`` (intermediate -> initial).
+    """
+    result = None
+    for coefficient, operator in zip(coefficients, operators):
+        if coefficient == 0:
+            continue
+        term = operator.createVecRight()
+        operator.multHermitian(vector, term)
+        term.scale(coefficient)
+        if result is None:
+            result = term
+        else:
+            result.axpy(1.0, term)
+    if result is None:
+        result = operators[0].createVecRight()
+        result.zeroEntries()
+    return result
+
+
+def _xas_pole_dict(hmat_n, seeds, eval_i, nkryl, lanczos_tridiagonal):
+    """
+    Build an EDRIXS-compatible XAS pole dictionary from seed vectors.
+
+    ``seeds[k]`` is the transition-operator-applied initial state associated
+    with energy ``eval_i[k]`` and living in the intermediate Hilbert space.
+    """
+    pole_dict = {'npoles': [], 'eigval': [], 'norm': [],
+                 'alpha': [], 'beta': []}
+    for energy, seed in zip(eval_i, seeds):
+        if seed.norm() == 0:
+            alpha_i = np.array([0.0], dtype=float)
+            beta_i = np.array([], dtype=float)
+            norm_i = 0.0
+        else:
+            alpha_i, beta_i, norm_i = lanczos_tridiagonal(
+                hmat_n, seed, nkryl=nkryl
+            )
+        pole_dict['npoles'].append(len(alpha_i))
+        pole_dict['eigval'].append(float(energy))
+        pole_dict['norm'].append(norm_i)
+        pole_dict['alpha'].append(alpha_i)
+        pole_dict['beta'].append(beta_i)
+    return pole_dict
