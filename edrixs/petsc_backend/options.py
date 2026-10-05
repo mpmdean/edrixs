@@ -114,14 +114,19 @@ RIXS_OPTIONS = {
     ),
     'linsys_tol': OptionSpec(
         1e-10,
-        'PETSc KSP absolute tolerance (atol); the relative criterion remains active.',
+        'PETSc KSP absolute tolerance (atol); shifted_pminres defaults to rtol=0.',
         positive_real,
     ),
     'linsys_maxiter': OptionSpec(
         1000, 'Maximum PETSc KSP iterations.', positive_integer
     ),
+    'pminres_library': OptionSpec(
+        None, 'Optional native library path for shifted_pminres.', _optional_string
+    ),
     'ksp_type': OptionSpec(
-        'gmres', 'PETSc KSP solver type.', _nonempty_string
+        'shifted_pminres',
+        'Shifted PMINRES (PCNONE, rtol=0), or a PETSc KSP solver type.',
+        _nonempty_string
     ),
 }
 

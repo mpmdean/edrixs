@@ -73,10 +73,10 @@ Input matrices are unchanged.
 
 .. backend-options:: petsc rixs
 
-``linsys_tol`` sets KSP's absolute tolerance, ``atol``. The relative tolerance
-remains at PETSc's default unless overridden through its options database;
-the solver can therefore converge through the relative criterion before
-reaching the absolute tolerance.
+The default solver is ``shifted_pminres``. ``linsys_tol`` sets KSP's absolute
+tolerance, ``atol``, and the default relative tolerance is zero. Other KSP
+types retain PETSc's default relative tolerance unless overridden through
+its options database.
 
 EDRIXS calls KSP's ``setFromOptions()`` after applying ``backend_kws``.
 Corresponding PETSc options-database entries, such as ``ksp_atol``, ``ksp_rtol``,
@@ -85,3 +85,7 @@ Corresponding PETSc options-database entries, such as ``ksp_atol``, ``ksp_rtol``
 ``ksp_type`` accepts a PETSc KSP type such as ``'gmres'``; the available
 algorithms and their tradeoffs are listed in the `KSP solver table
 <https://petsc.org/release/manual/ksp/#tab-kspdefaults>`__.
+
+To select GMRES instead of the default shifted PMINRES, pass::
+
+    backend_kws={'ksp_type': 'gmres', 'linsys_tol': 1e-10}

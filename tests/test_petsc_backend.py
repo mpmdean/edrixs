@@ -207,3 +207,51 @@ def test_ed_petsc_rejects_too_many_requested(complex_hermitian_petsc_mat):
     mat, expected_eigenvalues = complex_hermitian_petsc_mat
     with pytest.raises((RuntimeError, ValueError)):
         backend.ed_petsc(mat, num_evals=len(expected_eigenvalues) + 5)
+
+
+@requires_petsc
+def test_shifted_pminres_reuses_workspace_and_reports_true_residual():
+    from petsc4py import PETSc
+    from edrixs.petsc_backend.petsc_shifted_pminres import ShiftedPMINRES
+
+    dense = np.array([[1., .2j], [-.2j, 2.]], dtype=complex)
+    matrix = _petsc_dense_matrix(dense + .3j * np.eye(2))
+    rhs = _petsc_vector(matrix, [1j, 2.])
+    solution = rhs.duplicate()
+    context = ShiftedPMINRES()
+    ksp = PETSc.KSP().createPython(context, comm=PETSc.COMM_SELF)
+    try:
+        ksp.getPC().setType('none')
+        ksp.setOperators(matrix)
+        ksp.setTolerances(rtol=0, atol=1e-12, max_it=20)
+        handles = None
+        for shift in [0., .4, -.1]:
+            matrix.shift(shift)
+            dense += shift * np.eye(2)
+            ksp.solve(rhs, solution)
+            expected = np.linalg.solve(dense + .3j * np.eye(2), [1j, 2.])
+            assert_allclose(solution.getArray(), expected, atol=1e-12)
+            assert ksp.getConvergedReason() > 0
+            assert ksp.getResidualNorm() <= 1e-12
+            current = [v.handle for v in context._vectors]
+            if handles is not None:
+                assert current == handles
+            handles = current
+        rhs.set(0)
+        ksp.solve(rhs, solution)
+        assert solution.norm() == 0
+        assert ksp.getIterationNumber() == 0
+        assert ksp.getResidualNorm() == 0
+        ksp.setInitialGuessNonzero(True)
+        with pytest.raises(ValueError, match='zero initial guess'):
+            context.solve(ksp, rhs, solution)
+        ksp.setInitialGuessNonzero(False)
+        ksp.getPC().setType('jacobi')
+        with pytest.raises(ValueError, match='PCNONE'):
+            context.solve(ksp, rhs, solution)
+    finally:
+        ksp.destroy()
+        solution.destroy()
+        rhs.destroy()
+        matrix.destroy()
+    assert context._vectors == []
