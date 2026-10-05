@@ -9,7 +9,7 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.linalg import LinearOperator, aslinearoperator, gmres, lobpcg
 
-from .._solvers_helpers import _expand_broadening
+from .._solvers_helpers import _expand_broadening, _group_rixs_incoming
 from .krylov import lanczos_tridiagonal
 from .options import OPTIONS, validate_options
 from ..photon_transition import (
@@ -238,8 +238,9 @@ def rixs_scipy(
     """
     Calculate RIXS spectra with the SciPy Krylov correction-vector solver.
 
-    For each incident energy and polarization, collect the retained-state
-    poles and evaluate their thermally weighted spectrum.
+    For each incident energy and retained state, solve once per distinct
+    incoming polarization and reuse that solution across outgoing channels.
+    Each channel retains its own final-state poles and thermal spectrum.
 
     Hamiltonians are centered using the lowest retained energy and the first
     incident energy. Returned poles retain the original absolute energies.
@@ -323,6 +324,8 @@ def rixs_scipy(
             outgoing = quadrupole_polvec(outgoing, wavevector_f)
         polarizations.append((incoming, outgoing))
 
+    incoming_groups = _group_rixs_incoming(polarizations)
+
     gmres_kws = {
         'restart': kws['linsys_restart'], 'maxiter': kws['linsys_maxiter'],
     }
@@ -334,24 +337,25 @@ def rixs_scipy(
     spectrum = np.zeros((len(ominc), len(eloss), len(pol_type)))
     poles_all = []
     for incident_index, omega in enumerate(ominc):
-        incident_poles = []
-        for polarization_index, (polvec_i, polvec_f) in enumerate(
-                polarizations):
-            poles = {
-                'eigval': [], 'npoles': [], 'norm': [], 'alpha': [], 'beta': [],
-            }
-            for initial_index, energy in enumerate(eval_relative):
+        incident_poles = [
+            {'eigval': [], 'npoles': [], 'norm': [], 'alpha': [], 'beta': []}
+            for _ in polarizations
+        ]
+        for initial_index, energy in enumerate(eval_relative):
+            if not incoming_groups:
+                continue
+            shift = (omega - omega_ref) + energy + 1j * gamma_core[incident_index]
+            linear_system = LinearOperator(
+                hmat_n.shape,
+                matvec=lambda v, z=shift: z * v - hmat_n @ v,
+                dtype=complex,
+            )
+            for polvec_i, channels in incoming_groups:
                 rhs = _apply_linear_combination(
                     trans_op, polvec_i, evec_i[:, initial_index]
                 )
-                alpha, beta, norm = np.array([0.0]), np.array([]), 0.0
+                solution = None
                 if np.linalg.norm(rhs) != 0:
-                    shift = (omega - omega_ref) + energy + 1j * gamma_core[incident_index]
-                    linear_system = LinearOperator(
-                        hmat_n.shape,
-                        matvec=lambda v, z=shift: z * v - hmat_n @ v,
-                        dtype=complex,
-                    )
                     solution, info = gmres(linear_system, rhs, **gmres_kws)
                     if info != 0:
                         raise RuntimeError(
@@ -359,24 +363,29 @@ def rixs_scipy(
                             "info={}".format(initial_index, omega, info)
                         )
 
-                    final_vector = _apply_linear_combination(
-                        trans_op_H, np.conj(polvec_f), solution
-                    )
-                    if skip_gs:
-                        final_vector = final_vector - evec_i @ (
-                            evec_i.conj().T @ final_vector
+                for polarization_index, polvec_f in channels:
+                    alpha, beta, norm = np.array([0.0]), np.array([]), 0.0
+                    if solution is not None:
+                        final_vector = _apply_linear_combination(
+                            trans_op_H, np.conj(polvec_f), solution
                         )
-                    if np.linalg.norm(final_vector) != 0:
-                        alpha, beta, norm = lanczos_tridiagonal(
-                            hmat_i, final_vector, m=kws['nkryl']
-                        )
+                        if skip_gs:
+                            final_vector = final_vector - evec_i @ (
+                                evec_i.conj().T @ final_vector
+                            )
+                        if np.linalg.norm(final_vector) != 0:
+                            alpha, beta, norm = lanczos_tridiagonal(
+                                hmat_i, final_vector, m=kws['nkryl']
+                            )
 
-                poles['eigval'].append(energy)
-                poles['npoles'].append(len(alpha))
-                poles['norm'].append(norm)
-                poles['alpha'].append(alpha)
-                poles['beta'].append(beta)
+                    poles = incident_poles[polarization_index]
+                    poles['eigval'].append(energy)
+                    poles['npoles'].append(len(alpha))
+                    poles['norm'].append(norm)
+                    poles['alpha'].append(alpha)
+                    poles['beta'].append(beta)
 
+        for polarization_index, poles in enumerate(incident_poles):
             spectrum[incident_index, :, polarization_index] = (
                 get_spectra_from_poles(poles, eloss, gamma_final, temperature)
             )
@@ -387,7 +396,6 @@ def rixs_scipy(
                     alpha + energy_ref if norm != 0 else alpha
                     for alpha, norm in zip(poles['alpha'], poles['norm'])
                 ]
-                incident_poles.append(poles)
         if return_poles:
             poles_all.append(incident_poles)
     return (spectrum, poles_all) if return_poles else spectrum

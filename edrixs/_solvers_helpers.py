@@ -20,6 +20,24 @@ from .poles import get_spectra_from_poles, merge_pole_dicts
 from .soc import atom_hsoc
 
 
+def _group_rixs_incoming(polarizations):
+    """Group exactly equal incoming vectors, retaining original channel indices.
+
+    Use the computed dipole/quadrupole coefficients, without approximate or
+    phase-equivalent matching. Groups follow first occurrence order on every
+    MPI rank; each outgoing channel still gets its own final-state calculation.
+    """
+    groups = []
+    for index, (incoming, outgoing) in enumerate(polarizations):
+        for representative, channels in groups:
+            if np.array_equal(incoming, representative):
+                channels.append((index, outgoing))
+                break
+        else:
+            groups.append((incoming, [(index, outgoing)]))
+    return groups
+
+
 def _infer_backend(*operators):
     """Infer which backend owns every supplied operator."""
     from .dense_backend import dense_backend
