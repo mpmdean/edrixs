@@ -145,8 +145,6 @@ def _umat_dense_to_sparse(umat):
     """
     Convert a dense rank-4 Coulomb tensor to a sparse flattened matrix.
 
-    Preserve every nonzero entry without magnitude filtering.
-
     The flattening convention is
 
         row = lorb * norbs + korb
@@ -184,8 +182,7 @@ def _embed_impurity_core_umat_sparse(umat_tmp, v_norb, c_norb, ntot_v):
     orbital space of size v_norb + c_norb. The returned object is a sparse
     flattened matrix for the full SIAM space of size ntot_v + c_norb.
 
-    No dense full-space rank-4 tensor is allocated. Every nonzero entry is
-    preserved without magnitude filtering.
+    No dense full-space rank-4 tensor is allocated.
     """
     umat_tmp = np.asarray(umat_tmp)
 
