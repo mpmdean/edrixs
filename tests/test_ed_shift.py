@@ -142,12 +142,42 @@ def test_public_ed_passes_shift_and_hamiltonian_to_backend(backend, shift, monke
 
 
 @pytest.mark.parametrize('direct', [False, True])
-def test_nonzero_shift_rejected_for_fortran(direct):
-    with pytest.raises(ValueError, match='not supported by Fortran ED'):
-        if direct:
-            solvers.fortran_backend.ed_fortran(object(), shift=2)
-        else:
-            edrixs.ed(object(), shift=2, backend='fortran')
+@pytest.mark.parametrize('shift', [0, -2, 2])
+def test_fortran_ignores_shift_and_continues(direct, shift, tmp_path, monkeypatch):
+    from contextlib import nullcontext
+    import warnings
+    from edrixs.fortran_backend import fortran_backend as backend
+
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    def fake_solver(name):
+        assert name == 'ed_fsolver'
+
+        def run(fcomm, rank, size):
+            calls.append(name)
+            (tmp_path / 'eigvals.dat').write_text('1 -0.25\n')
+
+        return run
+
+    monkeypatch.setattr(backend, '_solver', fake_solver)
+    problem = edrixs.model_1v1c(('s', 's'), v_noccu=1)
+    hi, _, _ = edrixs.get_ops(*problem[:7], backend='fortran')
+    expected_warning = (
+        pytest.warns(UserWarning, match='Fortran ED ignores shift')
+        if shift != 0 else nullcontext()
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        with expected_warning:
+            if direct:
+                energies, vectors = backend.ed_fortran(hi, shift=shift)
+            else:
+                energies, vectors = edrixs.ed(hi, shift=shift, backend='fortran')
+
+    assert calls == ['ed_fsolver']
+    assert_array_equal(energies, [-0.25])
+    assert isinstance(vectors, backend.FortranDiskOperator)
 
 
 @pytest.mark.parametrize('backend', ['dense', 'scipy'])
