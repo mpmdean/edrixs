@@ -25,7 +25,7 @@ def _assemble_csr(rows, cols, data, shape):
 
 
 def build_op_scipy_matrix(
-        emat, umat, lb, rb=None, *, tol=1e-10, use_numba=False):
+        emat, umat, lb, rb=None, *, tol=1e-10, use_numba=True):
     """Build the final SciPy CSR matrix using the SciPy assembly policy."""
     if rb is None:
         rb = lb
