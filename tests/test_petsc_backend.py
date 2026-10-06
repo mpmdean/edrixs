@@ -117,7 +117,8 @@ def _petsc_vector(matrix, values):
 
 
 @requires_petsc
-def test_petsc_lanczos_matches_scipy_lanczos_and_preserves_seed():
+@pytest.mark.parametrize('nkryl', [1, 3, 20])
+def test_petsc_lanczos_matches_scipy_lanczos_and_preserves_seed(nkryl):
     """Backend-specific Lanczos implementations must produce the same projection."""
     rng = np.random.default_rng(91)
     raw = rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6))
@@ -128,14 +129,30 @@ def test_petsc_lanczos_matches_scipy_lanczos_and_preserves_seed():
     vector = _petsc_vector(matrix, seed)
     vector_before = vector.copy()
 
-    alpha_p, beta_p, norm_p = lanczos_petsc(matrix, vector, nkryl=20)
-    alpha_s, beta_s, norm_s = lanczos_scipy(hermitian, seed, m=20)
+    alpha_p, beta_p, norm_p = lanczos_petsc(matrix, vector, nkryl=nkryl)
+    alpha_s, beta_s, norm_s = lanczos_scipy(hermitian, seed, m=nkryl)
 
     assert_allclose(alpha_p, alpha_s, rtol=0, atol=2e-12)
     assert_allclose(beta_p, beta_s, rtol=0, atol=2e-12)
     assert norm_p == pytest.approx(norm_s, abs=2e-12)
     vector.axpy(-1.0, vector_before)
     assert vector.norm() == pytest.approx(0.0, abs=1e-14)
+
+
+@requires_petsc
+def test_petsc_lanczos_eigenvector_seed_breaks_down_without_modifying_input():
+    matrix = _petsc_dense_matrix(np.diag([2., 3., 5.]))
+    vector = _petsc_vector(matrix, [0., 2., 0.])
+    try:
+        for _ in range(2):
+            alpha, beta, norm = lanczos_petsc(matrix, vector, nkryl=3)
+            assert_allclose(alpha, [3.], rtol=0, atol=0)
+            assert len(beta) == 0
+            assert norm == 4.
+            assert_allclose(vector.getArray(), [0., 2., 0.], rtol=0, atol=0)
+    finally:
+        vector.destroy()
+        matrix.destroy()
 
 
 @requires_petsc_slepc

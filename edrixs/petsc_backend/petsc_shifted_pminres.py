@@ -135,8 +135,7 @@ class ShiftedPMINRES:
                 matrix.mult(v, work)
                 # PETSc conjugates its SECOND dot-product argument.
                 alpha = work.dot(v)
-                vprev.scale(-beta)
-                vprev.axpy(1, work)
+                vprev.axpby(1, -beta, work)
                 vprev.axpy(-alpha, v)
                 beta_next = vprev.norm()
                 delta = gamma0 * alpha - gamma1 * sigma0 * beta
@@ -148,10 +147,9 @@ class ShiftedPMINRES:
                 rho3 = sigma1 * beta
                 gamma1, sigma1 = gamma0, sigma0
                 gamma0, sigma0 = delta / rho1, beta_next / rho1
-                wprev.scale(-rho3)
-                wprev.axpy(1, v)
-                wprev.axpy(-rho2, w)
-                wprev.scale(1 / rho1)
+                # Fuse scaling with addition and fold in the normalization.
+                wprev.axpby(1 / rho1, -rho3 / rho1, v)
+                wprev.axpy(-rho2 / rho1, w)
                 x.axpy(gamma0 * eta, wprev)
                 estimate *= abs(sigma0)
                 eta *= -sigma0
