@@ -51,7 +51,7 @@ def _not_implemented(operation):
 
 
 def build_op_petsc(
-        emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
+        emat, umat, lb, rb=None, *, use_numba=True, backend_kws=None):
     """Build a PETSc many-body operator (stub)."""
     validate_options('build_op', backend_kws)
     _petsc_module()
