@@ -1,12 +1,290 @@
 #!/usr/bin/env python
+"""Fock-basis construction and integer-encoded basis objects."""
 
-__all__ = ['fock_bin', 'get_fock_bin_by_N', 'get_fock_half_N',
-           'get_fock_full_N', 'get_fock_basis_by_NLz', 'get_fock_basis_by_NSz',
-           'get_fock_basis_by_NJz', 'get_fock_basis_by_N_abelian',
-           'get_fock_basis_by_N_LzSz', 'write_fock_dec_by_N']
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import itertools
+from math import comb, prod
 
 import numpy as np
-import itertools
+
+__all__ = [
+    'FockBasisSpec', 'FockBasis', 'FockBinByN',
+    'build_fock_basis', 'get_fock_basis_int', 'get_fock_basis_combinadic',
+    'fock_bin', 'get_fock_bin_by_N', 'get_fock_half_N',
+    'get_fock_full_N', 'get_fock_basis_by_NLz', 'get_fock_basis_by_NSz',
+    'get_fock_basis_by_NJz', 'get_fock_basis_by_N_abelian',
+    'get_fock_basis_by_N_LzSz', 'write_fock_dec_by_N',
+]
+
+
+@dataclass(frozen=True, slots=True)
+class FockBasisSpec:
+    """Compact description of fixed occupancies in one or more orbital shells."""
+
+    shapes: tuple[tuple[int, int], ...]
+
+    def __post_init__(self):
+        shapes = tuple((int(norb), int(nocc)) for norb, nocc in self.shapes)
+        object.__setattr__(self, 'shapes', shapes)
+
+    @classmethod
+    def from_args(cls, *args):
+        """Build a specification from ``(norbs, nocc)`` pairs."""
+        if len(args) % 2 != 0:
+            raise ValueError("number of basis arguments must be even")
+        return cls(tuple(zip(args[0::2], args[1::2])))
+
+    @property
+    def norbs(self):
+        """Total number of spin-orbitals."""
+        return sum(norb for norb, _ in self.shapes)
+
+    def __len__(self):
+        return prod(comb(norb, nocc) for norb, nocc in self.shapes)
+
+
+class FockBasis:
+    """
+    Integer-encoded Fock basis with constant-time state lookup.
+
+    Orbital zero is stored as the least significant bit, as in native Fortran.
+    Orbital ``i`` has mask ``1 << i``; occupation lists remain in orbital
+    order, with orbital zero first.
+
+    Parameters
+    ----------
+    basis_int : sequence of int
+        Integer encodings of the basis states in matrix-index order.
+    norbs : int
+        Number of spin-orbitals represented by each state.
+    spec : FockBasisSpec or None, optional
+        Structured sector description when the basis was generated from fixed
+        shell occupancies. Arbitrary explicit bases may leave this as ``None``.
+    """
+
+    def __init__(self, basis_int, norbs, spec=None):
+        self.basis_int = [int(value) for value in basis_int]
+        self.norbs = int(norbs)
+        self.spec = spec
+        self.lookup = {value: index for index, value in enumerate(self.basis_int)}
+
+    def __len__(self):
+        return len(self.basis_int)
+
+    def encode(self, value):
+        """Return the basis position of an integer-encoded Fock state."""
+        return self.lookup[int(value)]
+
+    def decode(self, position):
+        """Return the integer-encoded Fock state at ``position``."""
+        return self.basis_int[position]
+
+
+@dataclass(slots=True)
+class FockBinByN:
+    """Implicit combinadic basis for a complete fixed-occupancy sector."""
+
+    shapes: tuple[tuple[int, int], ...]
+    spec: FockBasisSpec = field(init=False)
+    shell_norbs: tuple[int, ...] = field(init=False)
+    norbs: int = field(init=False)
+    noccus: tuple[int, ...] = field(init=False)
+    sizes: tuple[int, ...] = field(init=False)
+    num_subspaces: int = field(init=False)
+    num_orbitals: int = field(init=False)
+    dim: int = field(init=False)
+    offsets: tuple[int, ...] = field(init=False)
+    strides: tuple[int, ...] = field(init=False)
+    min_decode: int = field(init=False)
+    max_decode: int = field(init=False)
+
+    def __post_init__(self):
+        self.spec = FockBasisSpec(tuple(self.shapes))
+        self.shapes = self.spec.shapes
+        self.shell_norbs = tuple(norb for norb, _ in self.shapes)
+        self.norbs = self.spec.norbs
+        self.noccus = tuple(nocc for _, nocc in self.shapes)
+        self.sizes = tuple(comb(norb, nocc) for norb, nocc in self.shapes)
+        self.num_subspaces = len(self.shapes)
+        self.num_orbitals = self.norbs
+        self.dim = prod(self.sizes)
+
+        running = 0
+        offsets = []
+        for norb in self.shell_norbs:
+            offsets.append(running)
+            running += norb
+        self.offsets = tuple(offsets)
+
+        # The first shell varies fastest, matching get_fock_bin_by_N.
+        stride = 1
+        strides = []
+        for size in self.sizes:
+            strides.append(stride)
+            stride *= size
+        self.strides = tuple(strides)
+        self.min_decode, self.max_decode = _min_max_decode(self.shapes)
+
+    @classmethod
+    def from_spec(cls, spec):
+        """Build an implicit basis from a :class:`FockBasisSpec`."""
+        return cls(spec.shapes)
+
+    def __len__(self):
+        return self.dim
+
+    def encode(self, state):
+        """Return the canonical EDRIXS index of ``state``."""
+        index = _encode_combinadic(
+            int(state), self.shell_norbs, self.noccus, self.offsets,
+            self.sizes, self.strides,
+        )
+        if index < 0:
+            raise KeyError(int(state))
+        return index
+
+    def decode(self, index):
+        """Return the integer-encoded state at the canonical EDRIXS index."""
+        if index < 0:
+            index += self.dim
+        if index < 0 or index >= self.dim:
+            raise IndexError(index)
+        return _decode_combinadic(
+            int(index), self.shell_norbs, self.noccus, self.offsets, self.sizes
+        )
+
+    def jit_args(self):
+        """Return compact numeric metadata for an explicitly requested JIT path."""
+        return (
+            np.asarray(self.shell_norbs, dtype=np.int64),
+            np.asarray(self.noccus, dtype=np.int64),
+            np.asarray(self.offsets, dtype=np.int64),
+            np.asarray(self.sizes, dtype=np.int64),
+            np.asarray(self.strides, dtype=np.int64),
+            np.uint64(self.min_decode),
+            np.uint64(self.max_decode),
+        )
+
+
+def _hash_decoder(rank, norb, nocc):
+    """Decode a reflected colex rank with orbital zero in the low bit."""
+    if nocc == 0:
+        return 0
+    state = 0
+    j = nocc
+    i = norb - 1
+    c = comb(i, j)
+    while i >= 0 and j > 0:
+        if c <= rank:
+            state |= 1 << (norb - 1 - i)
+            rank -= c
+            old_i, old_j = i, j
+            i -= 1
+            j -= 1
+            if j == 0 or i < 0:
+                break
+            c = (c * old_j) // old_i
+        else:
+            if i == 0:
+                break
+            c = (c * (i - j)) // i
+            i -= 1
+    return state
+
+
+def _hash_encoder(state, norb):
+    """Encode one shell into its reflected colex combinadic rank."""
+    state = int(state) & ((1 << norb) - 1)
+    rank = 0
+    k = 1
+    # Reflect orbital positions for the historical occupation-list ordering.
+    while state:
+        pos = state.bit_length() - 1
+        rank += comb(norb - 1 - pos, k)
+        k += 1
+        state ^= 1 << pos
+    return rank
+
+
+def _decode_combinadic(index, norbs, noccus, offsets, sizes):
+    """Decode using the historical EDRIXS shell and state ordering."""
+    state = 0
+    for norb, nocc, offset, size in zip(norbs, noccus, offsets, sizes):
+        shell_rank = index % size
+        index //= size
+        colex_rank = size - 1 - shell_rank
+        state |= _hash_decoder(colex_rank, norb, nocc) << offset
+    return state
+
+
+def _encode_combinadic(state, norbs, noccus, offsets, sizes, strides):
+    """Encode using the historical EDRIXS shell and state ordering."""
+    index = 0
+    for norb, nocc, offset, size, stride in zip(
+            norbs, noccus, offsets, sizes, strides):
+        mask = (1 << norb) - 1
+        shell_state = (state >> offset) & mask
+        if shell_state.bit_count() != nocc:
+            return -1
+        shell_rank = size - 1 - _hash_encoder(shell_state, norb)
+        index += shell_rank * stride
+    return index
+
+
+def _min_max_decode(shapes):
+    state_min = 0
+    state_max = 0
+    running = 0
+    for norb, nocc in shapes:
+        shell_min = (1 << nocc) - 1
+        shell_max = shell_min << (norb - nocc)
+        state_min |= shell_min << running
+        state_max |= shell_max << running
+        running += norb
+    return state_min, state_max
+
+
+def get_fock_basis_int(*args):
+    """
+    Build an explicit :class:`FockBasis` for fixed shell occupancies.
+
+    The state ordering is the historical EDRIXS ordering produced by
+    :func:`get_fock_bin_by_N`.
+    """
+    if len(args) % 2 != 0:
+        print("Error: number of arguments is not even")
+        return None
+    spec = FockBasisSpec.from_args(*args)
+    combinadic_basis = FockBinByN.from_spec(spec)
+    basis_int = [
+        combinadic_basis.decode(index) for index in range(len(combinadic_basis))
+    ]
+    return FockBasis(basis_int, spec.norbs, spec=spec)
+
+
+def get_fock_basis_combinadic(*args):
+    """Build an implicit combinadic basis for fixed shell occupancies."""
+    if len(args) % 2 != 0:
+        print("Error: number of arguments is not even")
+        return None
+    return FockBinByN.from_spec(FockBasisSpec.from_args(*args))
+
+
+def build_fock_basis(basis, method='combinadic'):
+    """Realize a compact basis specification with the requested representation."""
+    if isinstance(basis, (FockBasis, FockBinByN)):
+        return basis
+    if not isinstance(basis, FockBasisSpec):
+        raise TypeError("basis must be a FockBasisSpec or a realized Fock basis")
+
+    if method == 'combinadic':
+        return FockBinByN.from_spec(basis)
+    if method == 'explicit':
+        args = tuple(value for shape in basis.shapes for value in shape)
+        return get_fock_basis_int(*args)
+    raise ValueError("basis method must be 'combinadic' or 'explicit'")
 
 
 def fock_bin(n, k):
@@ -36,19 +314,17 @@ def fock_bin(n, k):
      [0, 1, 1, 0],
      [0, 1, 0, 1],
      [0, 0, 1, 1]]
-
     """
-
     if n == 0:
         return [[0]]
 
-    res = []
-    for bits in itertools.combinations(list(range(n)), k):
-        s = [0] * n
-        for bit in bits:
-            s[bit] = 1
-        res.append(s)
-    return res
+    result = []
+    for occupied in itertools.combinations(range(n), k):
+        state = [0] * n
+        for orbital in occupied:
+            state[orbital] = 1
+        result.append(state)
+    return result
 
 
 def get_fock_bin_by_N(*args):
@@ -101,33 +377,30 @@ def get_fock_bin_by_N(*args):
      [0, 1, 1, 0, 0, 1],
      [0, 1, 0, 1, 0, 1],
      [0, 0, 1, 1, 0, 1]]
-
     """
-
-    n = len(args)
-
-    if n % 2 != 0:
+    narg = len(args)
+    if narg % 2 != 0:
         print("Error: number of arguments is not even")
-        return
+        return None
 
-    if n == 2:
+    if narg == 2:
         return fock_bin(args[0], args[1])
-    else:
-        result = []
-        res1 = fock_bin(args[0], args[1])
-        res2 = get_fock_bin_by_N(*args[2:])
-        for ifock in res2:
-            for jfock in res1:
-                result.append(jfock + ifock)
-        return result
+
+    result = []
+    first_shell = fock_bin(args[0], args[1])
+    remaining_shells = get_fock_bin_by_N(*args[2:])
+    for remaining in remaining_shells:
+        for first in first_shell:
+            result.append(first + remaining)
+    return result
 
 
 def get_fock_half_N(N):
-    res = [[] for i in range(N + 1)]
-    for i in range(2**N):
-        occu = bin(i).count('1')
-        res[occu].append(i)
-    return res
+    """Group half-space integer states by particle number."""
+    result = [[] for _ in range(N + 1)]
+    for state in range(2**N):
+        result[bin(state).count('1')].append(state)
+    return result
 
 
 def get_fock_full_N(norb, N):
@@ -149,7 +422,7 @@ def get_fock_full_N(norb, N):
     Examples
     --------
     >>> import edrixs
-    >>> edrixs.fock_bin(4,2)
+    >>> edrixs.fock_bin(4, 2)
     [[1, 1, 0, 0],
      [1, 0, 1, 0],
      [0, 1, 1, 0],
@@ -157,19 +430,20 @@ def get_fock_full_N(norb, N):
      [0, 1, 0, 1],
      [0, 0, 1, 1]]
 
-    >>> import edrixs
-    >>> edrixs.get_fock_full_N(4,2)
+    >>> edrixs.get_fock_full_N(4, 2)
     [3, 5, 6, 9, 10, 12]
-
     """
-
-    res = []
-    half_N = get_fock_half_N(norb // 2)
-    for m in range(norb // 2 + 1):
-        n = N - m
-        if n >= 0 and n <= norb // 2:
-            res.extend([i * 2**(norb // 2) + j for i in half_N[m] for j in half_N[n]])
-    return res
+    result = []
+    half_basis = get_fock_half_N(norb // 2)
+    for left_occupancy in range(norb // 2 + 1):
+        right_occupancy = N - left_occupancy
+        if 0 <= right_occupancy <= norb // 2:
+            result.extend(
+                left * 2**(norb // 2) + right
+                for left in half_basis[left_occupancy]
+                for right in half_basis[right_occupancy]
+            )
+    return result
 
 
 def get_fock_basis_by_NLz(norb, N, lz_list):
@@ -197,17 +471,10 @@ def get_fock_basis_by_NLz(norb, N, lz_list):
     --------
     >>> import edrixs
     >>> edrixs.get_fock_basis_by_NLz(6, 2, [-1, -1, 0, 0, 1, 1])
-    {
-     -2: [3],
-     -1: [5, 6, 9, 10],
-      0: [12, 17, 18, 33, 34],
-      1: [20, 36, 24, 40],
-      2: [48]
-    }
+    {-2: [3], -1: [5, 6, 9, 10], 0: [12, 17, 18, 33, 34],
+     1: [20, 36, 24, 40], 2: [48]}
     """
-
-    res = get_fock_basis_by_N_abelian(norb, N, lz_list)
-    return res
+    return get_fock_basis_by_N_abelian(norb, N, lz_list)
 
 
 def get_fock_basis_by_NSz(norb, N, sz_list):
@@ -235,17 +502,10 @@ def get_fock_basis_by_NSz(norb, N, sz_list):
     --------
     >>> import edrixs
     >>> edrixs.get_fock_basis_by_NSz(6, 2, [1, -1, 1, -1, 1, -1])
-    {
-     -2: [10, 34, 40],
-     -1: [],
-      0: [3, 6, 9, 12, 18, 33, 36, 24, 48],
-      1: [],
-      2: [5, 17, 20]
-    }
+    {-2: [10, 34, 40], -1: [],
+     0: [3, 6, 9, 12, 18, 33, 36, 24, 48], 1: [], 2: [5, 17, 20]}
     """
-
-    res = get_fock_basis_by_N_abelian(norb, N, sz_list)
-    return res
+    return get_fock_basis_by_N_abelian(norb, N, sz_list)
 
 
 def get_fock_basis_by_NJz(norb, N, jz_list):
@@ -273,30 +533,17 @@ def get_fock_basis_by_NJz(norb, N, jz_list):
     --------
     >>> import edrixs
     >>> edrixs.get_fock_basis_by_NJz(6, 2, [-1, 1, -3, -1, 1, 3])
-    {
-     -6: [],
-     -5: [],
-     -4: [5, 12],
-     -3: [],
-     -2: [6, 9, 20],
-     -1: [],
-      0: [3, 10, 17, 36, 24],
-      1: [],
-      2: [18, 33, 40],
-      3: [],
-      4: [34, 48],
-      5: [],
-      6: []
-    }
+    {-6: [], -5: [], -4: [5, 12], -3: [], -2: [6, 9, 20], -1: [],
+     0: [3, 10, 17, 36, 24], 1: [], 2: [18, 33, 40], 3: [],
+     4: [34, 48], 5: [], 6: []}
     """
-
-    res = get_fock_basis_by_N_abelian(norb, N, jz_list)
-    return res
+    return get_fock_basis_by_N_abelian(norb, N, jz_list)
 
 
 def get_fock_basis_by_N_abelian(norb, N, a_list):
     """
-    Get decimal digitals to represent Fock states, use some Abelian good quantum number.
+    Get decimal digitals to represent Fock states, use some Abelian good
+    quantum number.
 
     Parameters
     ----------
@@ -310,18 +557,19 @@ def get_fock_basis_by_N_abelian(norb, N, a_list):
     Returns
     -------
     basis: dict
-        A dictionary containing the decimal digitals, the key is good quantum numbers,
-        the value is a list of int.
+        A dictionary containing the decimal digitals, the key is good quantum
+        numbers, the value is a list of int.
     """
-
     result = get_fock_full_N(norb, N)
-    min_a, max_a = min(a_list) * N, max(a_list) * N
-    basis = {}
-    for i in range(min_a, max_a + 1):
-        basis[i] = []
-    for n in result:
-        a = sum([a_list[i] for i in range(0, n.bit_length()) if (n >> i & 1)])
-        basis[a].append(n)
+    minimum, maximum = min(a_list) * N, max(a_list) * N
+    basis = {value: [] for value in range(minimum, maximum + 1)}
+    for state in result:
+        quantum_number = sum(
+            a_list[index]
+            for index in range(state.bit_length())
+            if state >> index & 1
+        )
+        basis[quantum_number].append(state)
     return basis
 
 
@@ -346,52 +594,34 @@ def get_fock_basis_by_N_LzSz(norb, N, lz_list, sz_list):
     Returns
     -------
     basis: dict
-        A dictionary containing the decimal digitals, the key is a tuple containing good quantum
-        numbers ( :math:`l_{z}`, :math:`s_{z}`), the value is a list of int.
+        A dictionary containing the decimal digitals, the key is a tuple of
+        good quantum numbers (:math:`l_{z}`, :math:`s_{z}`), and the value is
+        a list of int.
 
     Examples
     --------
     >>> import edrixs
-    >>> edrixs.get_fock_basis_by_N_LzSz(6, 2, [-1, -1, 0, 0, 1, 1], [1, -1, 1, -1, 1, -1])
-    {
-     (-2, -2): [],
-     (-2, -1): [],
-      (-2, 0): [3],
-      (-2, 1): [],
-      (-2, 2): [],
-     (-1, -2): [10],
-     (-1, -1): [],
-      (-1, 0): [6, 9],
-      (-1, 1): [],
-      (-1, 2): [5],
-      (0, -2): [34],
-      (0, -1): [],
-       (0, 0): [12, 18, 33],
-       (0, 1): [],
-       (0, 2): [17],
-      (1, -2): [40],
-      (1, -1): [],
-       (1, 0): [36, 24],
-       (1, 1): [],
-       (1, 2): [20],
-      (2, -2): [],
-      (2, -1): [],
-       (2, 0): [48],
-       (2, 1): [],
-       (2, 2): []
-    }
+    >>> lz = [-1, -1, 0, 0, 1, 1]
+    >>> sz = [1, -1, 1, -1, 1, -1]
+    >>> edrixs.get_fock_basis_by_N_LzSz(6, 2, lz, sz)[(0, 0)]
+    [12, 18, 33]
     """
     result = get_fock_full_N(norb, N)
-    min_Lz, max_Lz = min(lz_list) * N, max(lz_list) * N
-    min_Sz, max_Sz = min(sz_list) * N, max(sz_list) * N
-    basis = {}
-    for i in range(min_Lz, max_Lz + 1):
-        for j in range(min_Sz, max_Sz + 1):
-            basis[(i, j)] = []
-    for n in result:
-        Lz, Sz = np.sum([[lz_list[i], sz_list[i]] for i in range(0, n.bit_length())
-                         if (n >> i & 1)], axis=0)
-        basis[(Lz, Sz)].append(n)
+    min_lz, max_lz = min(lz_list) * N, max(lz_list) * N
+    min_sz, max_sz = min(sz_list) * N, max(sz_list) * N
+    basis = {
+        (lz, sz): []
+        for lz in range(min_lz, max_lz + 1)
+        for sz in range(min_sz, max_sz + 1)
+    }
+    for state in result:
+        occupied = [
+            index for index in range(state.bit_length())
+            if state >> index & 1
+        ]
+        lz = sum(lz_list[index] for index in occupied)
+        sz = sum(sz_list[index] for index in occupied)
+        basis[(lz, sz)].append(state)
     return basis
 
 
@@ -412,40 +642,21 @@ def write_fock_dec_by_N(N, r, fname='fock_i.in'):
     Returns
     -------
     ndim: int
-        The dimension of the Hilbert space
+        The dimension of the Hilbert space.
 
     Examples
     --------
     >>> import edrixs
     >>> edrixs.write_fock_dec_by_N(4, 2, 'fock_i.in')
-    file fock_i.in looks like
-    15
-    3
-    5
     6
-    9
-    10
-    12
-    17
-    18
-    20
-    24
-    33
-    34
-    36
-    40
-    48
 
-    where, the first line is the total numer of Fock states,
-    and the following lines are the Fock states in decimal form.
+    The first line of ``fock_i.in`` is the total number of Fock states,
+    followed by the states in decimal form: ``3, 5, 6, 9, 10, 12``.
     """
-
-    res = get_fock_full_N(N, r)
-    res.sort()
-    ndim = len(res)
-    f = open(fname, 'w')
-    print(ndim, file=f)
-    for item in res:
-        print(item, file=f)
-    f.close()
-    return ndim
+    result = get_fock_full_N(N, r)
+    result.sort()
+    with open(fname, 'w') as stream:
+        print(len(result), file=stream)
+        for item in result:
+            print(item, file=stream)
+    return len(result)

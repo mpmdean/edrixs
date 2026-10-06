@@ -334,7 +334,7 @@ def tmat_cub2r_f(ispin=False):
 def tmat_c2j(orb_l):
     """
     Get the transformation matrix from the complex spherical harmonics to
-    the :math:`|j^2,j_z>` basis in which the spin-oribt coupling Hamiltonian
+    the :math:`|j,j_z>` basis in which the spin-orbit coupling Hamiltonian
     is diagonal. The orbital order is:
 
     :math:`|j=l-1/2, -j>, |j=l-1/2, -j+1>, ... |j=l-1/2, +j>,`

@@ -14,8 +14,12 @@
 # serve to show the default.
 
 import os
+import sys
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
+
+source_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(source_dir / '_ext'))
 
 try:
     import edrixs
@@ -46,6 +50,7 @@ print(
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'backend_options_directive',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.githubpages',
@@ -83,7 +88,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'edrixs'
+project = 'EDRIXS'
 copyright = '2019, Brookhaven National Lab'
 author = 'Brookhaven National Lab'
 
@@ -189,7 +194,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'edrixs.tex', 'edrixs Documentation',
+    (master_doc, 'edrixs.tex', 'EDRIXS Documentation',
      'Contributors', 'manual'),
 ]
 
@@ -199,7 +204,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'edrixs', 'edrixs Documentation',
+    (master_doc, 'edrixs', 'EDRIXS Documentation',
      [author], 1)
 ]
 
@@ -210,7 +215,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'edrixs', 'edrixs Documentation',
+    (master_doc, 'edrixs', 'EDRIXS Documentation',
      author, 'edrixs', 'An open source toolkit for simulating RIXS spectra based on ED',
      'Miscellaneous'),
 ]

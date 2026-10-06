@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
     # Slater integrals
     # The Slater integrals are calculated by the Cowan's code:
-    # [https://www.tcd.ie/Physics/people/Cormac.McGuinness/Cowan/]
+    # [https://www.tcd.ie/physics/research/groups/xray-spectroscopy/CowanCode.php]
     # by using Hartree-Fock mean-field method, and then re-scaled,
     # for example, Fff: 77%, Ffd: 60%, Gfd: 60%
     F2_ff, F4_ff, F6_ff = 9.711 * 0.77, 6.364 * 0.77, 4.677 * 0.77
