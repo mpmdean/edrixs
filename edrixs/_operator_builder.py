@@ -404,7 +404,7 @@ def _get_numba_kernels():
 
 
 def _prepare_entries_kernel(
-        lb, rb, e_terms, e_vals, u_terms, u_vals, *, use_numba=False):
+        lb, rb, e_terms, e_vals, u_terms, u_vals, *, use_numba=True):
     """Prepare a reusable entry kernel for backend-selected column ranges."""
     if not use_numba:
         def build_range(cstart, cend):
@@ -461,7 +461,7 @@ def _prepare_entries_kernel(
 
 def prepare_operator_entry_kernel(
         emat, umat, lb, rb=None, *, tol_e=1e-10, tol_u=1e-10,
-        use_numba=False):
+        use_numba=True):
     """Prepare a reusable kernel that generates entries for requested columns.
 
     The caller owns the work decomposition and matrix assembly policy. Calling
@@ -483,7 +483,7 @@ def prepare_operator_entry_kernel(
 
 def build_operator_entries(
         emat, umat, lb, rb=None, *, tol_e=1e-10, tol_u=1e-10,
-        cstart=0, cend=None, use_numba=False):
+        cstart=0, cend=None, use_numba=True):
     """Return entries for one requested column range.
 
     This compatibility wrapper leaves the work-range choice with the caller;
