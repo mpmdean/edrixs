@@ -633,7 +633,7 @@ def four_fermion_csr_auto(umat, basis, right_basis=None, tol=1e-10):
     ).tocsr()
 
 
-def build_op_scipy(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
+def build_op_scipy(emat, umat, lb, rb=None, *, use_numba=True, backend_kws=None):
     """Build and return a SciPy CSR many-body operator."""
     from .hash_basis_methods import build_op_scipy_matrix
 

@@ -64,7 +64,7 @@ __all__ = [
 
 
 def build_op(emat, umat, lb, rb=None, *, backend='scipy',
-             basis_method='combinadic', use_numba=False, backend_kws=None):
+             basis_method='combinadic', use_numba=True, backend_kws=None):
     """
     Build a many-body operator with the selected backend.
 
@@ -88,7 +88,8 @@ def build_op(emat, umat, lb, rb=None, *, backend='scipy',
         Representation used when ``lb``/``rb`` are compact basis specifications.
         The default is the implicit combinadic representation.
     use_numba : bool, optional
-        JIT-compile matrix-entry construction. The default is False.
+        JIT-compile matrix-entry construction. The default is True and requires
+        Numba. Pass False to use Python construction without Numba.
     backend_kws : mapping, optional
         Backend-specific construction options. Accepted names, defaults, and
         constraints are in the EDRIXS backend keyword reference:
@@ -133,7 +134,7 @@ def build_op(emat, umat, lb, rb=None, *, backend='scipy',
 
 def get_ops(
     emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, *,
-    backend='scipy', basis_method='combinadic', use_numba=False,
+    backend='scipy', basis_method='combinadic', use_numba=True,
     backend_kws=None,
 ):
     """
@@ -154,7 +155,8 @@ def get_ops(
         Basis representation constructed from the model metadata. The default
         is ``'combinadic'``.
     use_numba : bool, optional
-        JIT-compile matrix-entry construction. The default is False.
+        JIT-compile matrix-entry construction. The default is True and requires
+        Numba. Pass False to use Python construction without Numba.
     backend_kws : mapping, optional
         Backend-specific operator-construction options. Accepted names,
         defaults, and constraints are in the EDRIXS backend keyword reference:

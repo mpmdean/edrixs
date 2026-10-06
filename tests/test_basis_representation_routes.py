@@ -82,8 +82,9 @@ def test_invalid_basis_method_is_reported():
         build_fock_basis(FockBasisSpec.from_args(4, 2), method="unknown")
 
 
-def test_numba_is_only_required_when_explicitly_requested(monkeypatch):
-    """The default operator route must work when importing numba is impossible."""
+@pytest.mark.parametrize("numba_options", [{}, {"use_numba": True}])
+def test_numba_default_requires_numba_and_allows_opt_out(monkeypatch, numba_options):
+    """Numba is required by default; an explicit opt-out still works."""
     spec = FockBasisSpec.from_args(2, 1)
     emat = np.array([[1.0, 0.25], [0.25, -0.5]], dtype=complex)
 
@@ -114,7 +115,7 @@ def test_numba_is_only_required_when_explicitly_requested(monkeypatch):
             spec,
             backend="scipy",
             basis_method="combinadic",
-            use_numba=True,
+            **numba_options,
         )
 
 

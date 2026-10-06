@@ -515,7 +515,7 @@ def owns_operator_petsc(operator):
 # -----------------------------------------------------------------------------
 
 
-def build_op_petsc(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
+def build_op_petsc(emat, umat, lb, rb=None, *, use_numba=True, backend_kws=None):
     """Build a distributed PETSc many-body operator.
 
     Assemble ``H = sum_ij emat_ij f_i^dagger f_j
@@ -535,7 +535,8 @@ def build_op_petsc(emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None
     rb : FockBasis, optional
         Right (column) many-body basis. Defaults to ``lb``.
     use_numba : bool, optional
-        JIT-compile matrix-entry construction. The default is False.
+        JIT-compile matrix-entry construction. The default is True and requires
+        Numba. Pass False to use Python construction without Numba.
     backend_kws : mapping, optional
         Extra options. Recognized keys:
 
