@@ -251,7 +251,7 @@ def owns_operator_dense(operator):
 
 
 def build_op_dense(
-        emat, umat, lb, rb=None, *, use_numba=False, backend_kws=None):
+        emat, umat, lb, rb=None, *, use_numba=True, backend_kws=None):
     """Build a many-body operator and return it as a dense NumPy matrix."""
     kws = validate_options('build_op', backend_kws)
     return build_op_scipy(

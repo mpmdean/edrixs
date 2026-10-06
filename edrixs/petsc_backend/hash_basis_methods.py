@@ -110,7 +110,7 @@ def build_op_petsc_matrix(
     nnz_guess_per_row=None,
     mat_type=None,
     assembly_chunk_cols=4096,
-    use_numba=False,
+    use_numba=True,
 ):
     """Build the final PETSc matrix from backend-selected bounded work units."""
     from petsc4py import PETSc
