@@ -556,7 +556,9 @@ def build_op_petsc(emat, umat, lb, rb=None, *, use_numba=True, backend_kws=None)
         - ``comm`` : PETSc communicator (default ``PETSc.COMM_WORLD``).
         - ``tol_e`` : threshold for retaining ``emat`` entries.
         - ``tol_u`` : threshold for retaining ``umat`` entries.
-        - ``nnz_guess_per_row`` : preallocation hint.
+        - ``nnz_guess_per_row`` : nonzeros per row to reserve, separately for
+          local and remote column blocks under MPI. Larger hints use more
+          memory but can avoid reallocations during assembly.
         - ``mat_type`` : optional PETSc matrix type to convert to after
           assembly, e.g. ``'aijcusparse'``.
         - ``assembly_chunk_cols`` : number of owned basis columns generated

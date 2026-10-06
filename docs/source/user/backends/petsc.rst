@@ -34,7 +34,11 @@ Options are specific to the stage where they are supplied.
 .. backend-options:: petsc get_ops
 
 ``nnz_guess_per_row`` controls PETSc matrix preallocation.  Leaving it unset
-uses an estimate from the retained one- and two-body coefficients.  A
+uses an estimate from the retained one- and two-body coefficients. With multiple
+MPI ranks, the hint is applied separately to the local-column and remote-column
+blocks of each rank's matrix rows. With one rank it applies to the sequential
+matrix. Larger hints reserve more memory but can avoid reallocations during
+assembly; they do not change the matrix values. A
 ``mat_type`` such as ``'aijcusparse'`` can select an accelerated matrix format;
 see PETSc's `matrix type overview
 <https://petsc.org/release/manual/mat/#basic-matrix-operations>`__.

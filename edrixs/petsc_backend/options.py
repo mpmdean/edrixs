@@ -70,7 +70,8 @@ CONSTRUCTION_OPTIONS = {
     ),
     'nnz_guess_per_row': OptionSpec(
         None,
-        'PETSc sparse-matrix preallocation hint; estimated automatically when omitted.',
+        'Nonzeros per row reserved separately for local and remote column blocks '
+        'under MPI; estimated automatically when omitted.',
         _optional_nonnegative_integer,
     ),
     'mat_type': OptionSpec(
