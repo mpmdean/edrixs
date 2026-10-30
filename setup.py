@@ -114,7 +114,7 @@ setup(
     python_requires=">=3.10",
     author="Brookhaven National Lab",
     author_email="yilinwang@bnl.gov",
-    url="https://github.com/NSLS-II/edrixs",
+    url="https://github.com/EDRIXS/edrixs",
     packages=find_packages(exclude=["docs", "tests", "bin", "examples", "src"]),
     entry_points={
         "console_scripts": [
