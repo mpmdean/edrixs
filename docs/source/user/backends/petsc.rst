@@ -43,7 +43,7 @@ PETSc ``xas`` and ``rixs`` accept ``matrix_lifetime`` in ``backend_kws``:
   matrix for reuse during the calculation, and destroys it before returning.
 * ``'recompute'`` builds a matrix for each operation and destroys it immediately
   afterward, rebuilding it for later uses. This reduces peak memory usage at the
-  cost of more CPU time. Can be useful for the biggest possible jobs 
+  cost of more CPU time. This can be useful for the largest jobs.
 
 
 ``build_op`` and ``get_ops``

@@ -112,6 +112,8 @@ def test_run_solver_reuses_existing_communicator():
 )
 def test_fortran_backend_reuses_existing_mpi_communicator(tmp_path):
     """All Python ranks call the f2py solvers on their shared communicator."""
+    from mpi4py import MPI
+
     script = tmp_path / 'collective_fortran.py'
     script.write_text(
         """
@@ -141,8 +143,11 @@ for value in (eval_i, absorption, scattering):
     env['PYTHONPATH'] = os.pathsep.join(
         entry for entry in [env.get('PYTHONPATH', ''), *sys.path] if entry
     )
+    launcher = ['mpirun']
+    if MPI.get_vendor()[0] == 'Open MPI':
+        launcher.append('--oversubscribe')
     subprocess.run(
-        ['mpirun', '--oversubscribe', '-np', '2', sys.executable, str(script)],
+        [*launcher, '-np', '2', sys.executable, str(script)],
         cwd=tmp_path,
         env=env,
         check=True,
