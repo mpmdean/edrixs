@@ -78,6 +78,8 @@ docs/build/
 docs/source/generated/
 docs/source/auto_examples/
 docs/source/sg_execution_times.rst
+# Notebook copies are generated from the Python gallery examples.
+examples/notebooks/
 
 # pytest
 .pytest_cache/
