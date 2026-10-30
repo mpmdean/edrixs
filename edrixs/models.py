@@ -85,7 +85,7 @@ def model_1v1c(shell_name, *, shell_level=None, v_soc=None, c_soc=0,
         ``c_norb * shell_level[1]`` (zero if unspecified), excluding Coulomb
         contributions.
         Pass the first seven outputs to :func:`~edrixs.solvers.get_ops` and
-        ``shift`` to dense or SciPy :func:`~edrixs.solvers.ed`.
+        ``shift`` to dense, SciPy, or PETSc :func:`~edrixs.solvers.ed`.
         The returned integrals retain the full, unshifted energies.
     """
     if verbose:
@@ -349,8 +349,8 @@ def model_2v1c(
     shift : float
         Filled core shell-level energy, ``c_norb * shell_level[2]`` (zero if
         unspecified), excluding Coulomb contributions. Pass the first seven
-        outputs to :func:`~edrixs.solvers.get_ops` and ``shift`` to dense or
-        SciPy :func:`~edrixs.solvers.ed`. Integrals remain unshifted.
+        outputs to :func:`~edrixs.solvers.get_ops` and ``shift`` to dense, SciPy, or
+        PETSc :func:`~edrixs.solvers.ed`. Integrals remain unshifted.
 
     See Also
     --------
@@ -579,7 +579,8 @@ def model_siam(
     is the setup analogue of :func:`~edrixs.solvers.ed_siam_fort` at fixed
     ``v_noccu``; it does not search over occupancies, build many-body
     Hamiltonians, or diagonalize them. Pass the returned tuple to
-    :func:`~edrixs.solvers.get_ops` to construct the many-body operators.
+    :func:`~edrixs.solvers.get_ops` to construct the many-body operators
+    with the SciPy, dense, or PETSc backend.
 
     All energies, Slater integrals, hybridizations, spin-orbit coupling
     constants, and magnetic-field components are in eV. Let ``v_norb`` and
@@ -720,7 +721,7 @@ def model_siam(
     shift : float
         Filled core shell-level energy, ``c_norb * c_level``, excluding
         Coulomb contributions. Pass the first seven outputs to
-        :func:`~edrixs.solvers.get_ops` and ``shift`` to dense or SciPy
+        :func:`~edrixs.solvers.get_ops` and ``shift`` to dense, SciPy, or PETSc
         :func:`~edrixs.solvers.ed`. Integrals remain unshifted.
     """
     if verbose:
@@ -953,8 +954,8 @@ def model_siam_2d1p(
     -------
     emat_i, umat_i, basis_i, emat_n, umat_n, basis_n, trans_mat, shift
         The eight model_siam outputs. Pass the first seven to
-        :func:`~edrixs.solvers.get_ops` and the final ``shift`` to dense or
-        SciPy :func:`~edrixs.solvers.ed`. Here ``shift = 6 * (-om_shift - 5*E_p)``;
+        :func:`~edrixs.solvers.get_ops` and the final ``shift`` to dense, SciPy, or
+        PETSc :func:`~edrixs.solvers.ed`. Here ``shift = 6 * (-om_shift - 5*E_p)``;
         it excludes Coulomb contributions and does not alter the integrals. One-body
         matrices both have shape (26, 26) and use complex spherical
         harmonics. Basis metadata fixes initial valence occupancy to nd+10,

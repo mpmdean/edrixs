@@ -1,29 +1,34 @@
-"""Integration tests from model metadata through all SciPy construction routes."""
+"""Integration tests from model metadata through all operator-construction routes."""
 
 import importlib.util
 from itertools import product
 
 import numpy as np
 import pytest
+import scipy.sparse as sp
 from numpy.testing import assert_allclose
 
 from edrixs.fock_basis import FockBasisSpec
 from edrixs.models import model_1v1c, model_2v1c, model_siam
 from edrixs.solvers import get_ops
 
+from operator_factories import materialize_ops
+
 
 HAS_NUMBA = importlib.util.find_spec("numba") is not None
+HAS_PETSC = importlib.util.find_spec("petsc4py") is not None
 
 
-# Public SciPy construction matrix: basis representation x JIT choice.
+# Full public construction matrix: backend x basis representation x JIT choice.
 ALL_ROUTES = [
     pytest.param(
+        backend,
         basis_method,
         use_numba,
-        id=f"scipy-{basis_method}-{'numba' if use_numba else 'vanilla'}",
+        id=f"{backend}-{basis_method}-{'numba' if use_numba else 'vanilla'}",
     )
-    for basis_method, use_numba in product(
-        ("combinadic", "explicit"), (False, True)
+    for backend, basis_method, use_numba in product(
+        ("scipy", "petsc"), ("combinadic", "explicit"), (False, True)
     )
 ]
 
@@ -41,10 +46,37 @@ def _small_1v1c_problem():
     )
 
 
-def _skip_unavailable(use_numba):
-    """Skip only an explicitly requested optional Numba route when unavailable."""
+def _to_dense(operator):
+    """Convert small SciPy/NumPy/PETSc operators to a common dense reference."""
+    if sp.issparse(operator):
+        return operator.toarray()
+    if isinstance(operator, np.ndarray):
+        return operator
+
+    # PETSc matrices in these tests use COMM_SELF and are therefore sequential.
+    from petsc4py import PETSc
+
+    nrow, ncol = operator.getSize()
+    rows = np.arange(nrow, dtype=PETSc.IntType)
+    cols = np.arange(ncol, dtype=PETSc.IntType)
+    return np.asarray(operator.getValues(rows, cols))
+
+
+def _route_kwargs(backend):
+    """Keep PETSc tests sequential and force multiple bounded assembly chunks."""
+    if backend == "petsc":
+        from petsc4py import PETSc
+
+        return {"backend_kws": {"comm": PETSc.COMM_SELF, "assembly_chunk_cols": 2}}
+    return {}
+
+
+def _skip_unavailable(backend, use_numba):
+    """Skip only optional routes whose explicitly requested dependency is absent."""
     if use_numba and not HAS_NUMBA:
         pytest.skip("numba is required for the requested JIT route")
+    if backend == "petsc" and not HAS_PETSC:
+        pytest.skip("petsc4py is required for the PETSc route")
 
 
 def test_all_model_functions_return_compact_basis_metadata():
@@ -72,35 +104,36 @@ def test_all_model_functions_return_compact_basis_metadata():
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("basis_method,use_numba", ALL_ROUTES)
-def test_model_to_get_ops_all_scipy_routes_are_numerically_consistent(
-    basis_method, use_numba
+@pytest.mark.parametrize("backend,basis_method,use_numba", ALL_ROUTES)
+def test_model_to_get_ops_all_eight_routes_are_numerically_consistent(
+    backend, basis_method, use_numba
 ):
-    """Compare all four public SciPy operator-construction routes numerically.
+    """Compare all eight public operator-construction routes numerically.
 
-    The explicit, non-Numba SciPy route is the common reference. Every
-    combinadic/explicit x vanilla/Numba SciPy route must produce the same
-    initial Hamiltonian, intermediate Hamiltonian, and transition operators
-    from the same compact model metadata.
+    The explicit, non-Numba SciPy route is the common reference. Every other
+    SciPy/PETSc x combinadic/explicit x vanilla/Numba route must produce the
+    same initial Hamiltonian, intermediate Hamiltonian, and transition
+    operators from the same compact model metadata.
     """
-    _skip_unavailable(use_numba)
+    _skip_unavailable(backend, use_numba)
     problem = _small_1v1c_problem()
 
-    reference_i, reference_n, reference_t = get_ops(
+    reference_i, reference_n, reference_t = materialize_ops(get_ops(
         *problem[:7],
         backend="scipy",
         basis_method="explicit",
         use_numba=False,
-    )
-    actual_i, actual_n, actual_t = get_ops(
+    ))
+    actual_i, actual_n, actual_t = materialize_ops(get_ops(
         *problem[:7],
-        backend="scipy",
+        backend=backend,
         basis_method=basis_method,
         use_numba=use_numba,
-    )
+        **_route_kwargs(backend),
+    ))
 
-    assert_allclose(actual_i.toarray(), reference_i.toarray(), rtol=0, atol=2e-12)
-    assert_allclose(actual_n.toarray(), reference_n.toarray(), rtol=0, atol=2e-12)
+    assert_allclose(_to_dense(actual_i), reference_i.toarray(), rtol=0, atol=2e-12)
+    assert_allclose(_to_dense(actual_n), reference_n.toarray(), rtol=0, atol=2e-12)
     assert len(actual_t) == len(reference_t)
     for actual, reference in zip(actual_t, reference_t):
-        assert_allclose(actual.toarray(), reference.toarray(), rtol=0, atol=2e-12)
+        assert_allclose(_to_dense(actual), reference.toarray(), rtol=0, atol=2e-12)

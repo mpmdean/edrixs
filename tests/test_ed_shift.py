@@ -9,6 +9,8 @@ from scipy.sparse.linalg import aslinearoperator
 import edrixs
 from edrixs import solvers
 
+from operator_factories import operator_factory, operator_factories
+
 
 @pytest.mark.parametrize('model,kwargs,nc,core_level', [
     (edrixs.model_1v1c, dict(shell_name=('s', 'p'), shell_level=(0.2, 100)), 6, 100),
@@ -98,10 +100,10 @@ def test_backend_centers_before_diagonalization_and_restores_energies(
         monkeypatch.setattr(sp.csr_matrix, 'toarray', forbidden)
     if direct:
         values, actual_vectors = getattr(module, 'ed_' + backend)(
-            operator, num_evals=2, shift=shift)
+            operator_factory(operator, backend), num_evals=2, shift=shift)
     else:
         values, actual_vectors = edrixs.ed(
-            operator, num_evals=2, shift=shift, backend=backend)
+            operator_factory(operator, backend), num_evals=2, shift=shift)
     assert_allclose(values, [shift + 1, shift + 2])
     assert_array_equal(actual_vectors, vectors)
     assert_array_equal(operator @ np.eye(2), full)
@@ -116,7 +118,12 @@ def test_shifted_ed_eigenpairs_match_original_hamiltonian(kind, shift):
     full = base + shift * np.eye(20)
     operator = _operator(full, kind)
     kws = {} if kind == 'dense' else {'seed': 17, 'maxiter': 200}
-    energies, vectors = edrixs.ed(operator, num_evals=2, shift=shift, backend_kws=kws)
+    energies, vectors = edrixs.ed(
+        operator_factory(operator, 'dense' if kind == 'dense' else 'scipy'),
+        num_evals=2,
+        shift=shift,
+        backend_kws=kws,
+    )
     expected_e, expected_v = np.linalg.eigh(full)
     assert_allclose(energies, expected_e[:2], atol=2e-9, rtol=0)
     assert_allclose(full @ vectors, vectors * energies, atol=2e-9, rtol=0)
@@ -128,48 +135,20 @@ def test_shifted_ed_eigenpairs_match_original_hamiltonian(kind, shift):
 @pytest.mark.parametrize('backend', ['dense', 'scipy', 'fortran', 'petsc'])
 @pytest.mark.parametrize('shift', [0, -1e6, 1e6])
 def test_public_ed_passes_shift_and_hamiltonian_to_backend(backend, shift, monkeypatch):
-    operator = object()
+    operator = (solvers.fortran_backend.FortranDiskOperator()
+                if backend == 'fortran' else object())
     result = (np.array([2.]), object())
 
     def solver(actual, **kwargs):
-        assert actual is operator
+        assert actual is factory
         assert kwargs == {'num_evals': 1, 'shift': shift, 'backend_kws': None}
         return result
 
-    monkeypatch.setattr(getattr(solvers, backend + '_backend'), 'ed_' + backend, solver)
-    assert edrixs.ed(operator, backend=backend, shift=shift) is result
-
-
-@pytest.mark.parametrize('backend', ['petsc'])
-@pytest.mark.parametrize('direct', [False, True])
-def test_nonzero_shift_rejected_for_unsupported_backend(backend, direct):
-    with pytest.raises(ValueError, match='only by dense and scipy'):
-        if direct:
-            module = getattr(solvers, backend + '_backend')
-            getattr(module, 'ed_' + backend)(object(), shift=2)
-        else:
-            edrixs.ed(object(), shift=2, backend=backend)
-
-
-@pytest.mark.parametrize('backend', ['dense', 'scipy'])
-def test_spectra_keep_original_reference_after_shifted_ed(backend):
-    *problem, shift = edrixs.model_1v1c(
-        ('s', 'p'), shell_level=(0.1, 200), c_soc=0.2,
-        v_othermat=np.diag([-0.2, 0.2]), slater=([0.3] * 6, [0.4] * 6))
-    hi, hn, trans = edrixs.get_ops(*problem, backend=backend)
-    reference_e, reference_v = edrixs.ed(hi, num_evals=2, backend=backend)
-    actual_e, actual_v = edrixs.ed(hi, num_evals=2, shift=shift, backend=backend)
-    assert_allclose(actual_e, reference_e, atol=1e-10)
-    for energies, vectors in [(reference_e, reference_v), (actual_e, actual_v)]:
-        xas = edrixs.xas(energies, vectors, hn, trans, [-201, -200, -199],
-                         backend=backend, pol_type=[('isotropic', 0)])
-        rixs = edrixs.rixs(energies, vectors, hi, hn, trans, [-200], [0, 0.2, 0.4],
-                           backend=backend)
-        if energies is reference_e:
-            expected_x, expected_r = xas, rixs
-        else:
-            assert_allclose(xas, expected_x, atol=1e-9)
-            assert_allclose(rixs, expected_r, atol=1e-9)
+    module = getattr(solvers, backend + '_backend')
+    monkeypatch.setattr(module, 'ed_' + backend, solver)
+    factory = (lambda: operator) if backend != 'fortran' else operator
+    factory.backend = backend
+    assert edrixs.ed(factory, shift=shift) is result
 
 
 @pytest.mark.parametrize('direct', [False, True])
@@ -204,8 +183,42 @@ def test_fortran_ignores_shift_and_continues(direct, shift, tmp_path, monkeypatc
             if direct:
                 energies, vectors = backend.ed_fortran(hi, shift=shift)
             else:
-                energies, vectors = edrixs.ed(hi, shift=shift, backend='fortran')
+                energies, vectors = edrixs.ed(operator_factory(hi, 'fortran'), shift=shift)
 
     assert calls == ['ed_fsolver']
     assert_array_equal(energies, [-0.25])
     assert isinstance(vectors, backend.FortranDiskOperator)
+
+
+@pytest.mark.parametrize('backend', ['dense', 'scipy'])
+def test_spectra_keep_original_reference_after_shifted_ed(backend):
+    *problem, shift = edrixs.model_1v1c(
+        ('s', 'p'), shell_level=(0.1, 200), c_soc=0.2,
+        v_othermat=np.diag([-0.2, 0.2]), slater=([0.3] * 6, [0.4] * 6))
+    hi, hn, trans = edrixs.get_ops(*problem, backend=backend)
+    reference_e, reference_v = edrixs.ed(operator_factory(hi, backend), num_evals=2)
+    actual_e, actual_v = edrixs.ed(operator_factory(hi, backend), num_evals=2, shift=shift)
+    assert_allclose(actual_e, reference_e, atol=1e-10)
+    for energies, vectors in [(reference_e, reference_v), (actual_e, actual_v)]:
+        xas = edrixs.xas(
+            energies,
+            vectors,
+            operator_factory(hn, backend),
+            operator_factories(trans, backend),
+            [-201, -200, -199],
+            pol_type=[('isotropic', 0)],
+        )
+        rixs = edrixs.rixs(
+            energies,
+            vectors,
+            operator_factory(hi, backend),
+            operator_factory(hn, backend),
+            operator_factories(trans, backend),
+            [-200],
+            [0, 0.2, 0.4],
+        )
+        if energies is reference_e:
+            expected_x, expected_r = xas, rixs
+        else:
+            assert_allclose(xas, expected_x, atol=1e-9)
+            assert_allclose(rixs, expected_r, atol=1e-9)
