@@ -113,7 +113,7 @@ setup(
     long_description=readme,
     python_requires=">=3.10",
     author="Brookhaven National Lab",
-    author_email="yilinwang@bnl.gov",
+    author_email="mdean@bnl.gov",
     url="https://github.com/EDRIXS/edrixs",
     packages=find_packages(exclude=["docs", "tests", "bin", "examples", "src"]),
     entry_points={
