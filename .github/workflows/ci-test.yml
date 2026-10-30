@@ -63,7 +63,7 @@ jobs:
           - host-os: "ubuntu-latest"
             python-version: "3.14"
             numpy-spec: "numpy>=2"
-          - host-os: "macos-14"
+          - host-os: "macos-15"
             python-version: "3.14"
             numpy-spec: "numpy>=2"
       fail-fast: false
