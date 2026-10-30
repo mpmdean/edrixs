@@ -2,11 +2,31 @@
 edrixs
 ===============================
 
-.. image:: https://img.shields.io/pypi/v/edrixs.svg
-        :target: https://pypi.python.org/pypi/edrixs
+|ci| |conda| |pypi| |docs| |doi| |binder|
 
-.. image:: https://mybinder.org/badge_logo.svg
- :target: https://mybinder.org/v2/gh/NSLS-II/edrixs.git/master?urlpath=lab
+.. |ci| image:: https://github.com/EDRIXS/edrixs/actions/workflows/ci-test.yml/badge.svg?branch=master&event=push
+   :target: https://github.com/EDRIXS/edrixs/actions/workflows/ci-test.yml?query=branch%3Amaster+event%3Apush
+   :alt: CI status
+
+.. |conda| image:: https://img.shields.io/conda/vn/conda-forge/edrixs.svg
+   :target: https://anaconda.org/conda-forge/edrixs
+   :alt: Conda-forge version
+
+.. |pypi| image:: https://img.shields.io/pypi/v/edrixs.svg
+   :target: https://pypi.org/project/edrixs/
+   :alt: PyPI version
+
+.. |docs| image:: https://img.shields.io/badge/docs-online-blue.svg
+   :target: https://edrixs.github.io/edrixs/
+   :alt: Documentation
+
+.. |doi| image:: https://img.shields.io/badge/DOI-10.1016%2Fj.cpc.2019.04.018-blue.svg
+   :target: https://doi.org/10.1016/j.cpc.2019.04.018
+   :alt: Paper DOI
+
+.. |binder| image:: https://mybinder.org/badge_logo.svg
+   :target: https://mybinder.org/v2/gh/edrixs/edrixs.git/master?urlpath=lab
+   :alt: Launch Binder
 
 EDRIXS is an open source toolkit for simulating XAS and RIXS spectra based on exact diagonalization of model Hamiltonians.
 It was started as part of the `COMSCOPE project <https://www.bnl.gov/comscope/>`_ in the
