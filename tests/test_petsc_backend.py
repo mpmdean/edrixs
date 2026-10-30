@@ -1,20 +1,76 @@
-"""Contract tests for the intentionally unimplemented PETSc backend stub."""
+"""Unit and numerical consistency tests for the PETSc backend."""
+
+import importlib.util
 
 import numpy as np
 import pytest
+from numpy.testing import assert_allclose
 
 import edrixs.petsc_backend.petsc_backend as backend
+from edrixs.fock_basis import FockBasisSpec
+from edrixs.petsc_backend.lanczos import lanczos_tridiagonal as lanczos_petsc
+from edrixs.petsc_backend.options import validate_options
+from edrixs.scipy_backend.krylov import lanczos_tridiagonal as lanczos_scipy
+from edrixs.solvers import build_op, ed
+
+from operator_factories import operator_factory
 
 
-def test_owns_operator_returns_false_for_non_petsc_objects():
-    """Recognition must never raise when given ordinary Python/NumPy objects."""
-    assert backend.owns_operator_petsc(np.eye(2)) is False
-    assert backend.owns_operator_petsc(object()) is False
+HAS_PETSC = importlib.util.find_spec("petsc4py") is not None
+HAS_SLEPC = importlib.util.find_spec("slepc4py") is not None
+requires_petsc = pytest.mark.skipif(
+    not HAS_PETSC,
+    reason="petsc4py is required for PETSc numeric tests",
+)
+requires_petsc_slepc = pytest.mark.skipif(
+    not (HAS_PETSC and HAS_SLEPC),
+    reason="petsc4py and slepc4py are required for PETSc eigensolver tests",
+)
+
+
+# -----------------------------------------------------------------------------
+# Contract / logic tests (no PETSc runtime required)
+# -----------------------------------------------------------------------------
+
+
+def test_backend_kws_validation():
+    assert validate_options('xas', None) == {}
+    assert validate_options('xas', {"nkryl": 50}) == {"nkryl": 50}
+    with pytest.raises(TypeError, match="mapping"):
+        validate_options('xas', [("nkryl", 50)])
+
+
+def test_backend_kws_returns_independent_copy():
+    original = {"nkryl": 10}
+    copied = validate_options('xas', original)
+    copied["nkryl"] = 999
+    assert original["nkryl"] == 10
+
+
+@pytest.mark.parametrize("num_evals", [0, -3])
+def test_ed_petsc_rejects_nonpositive_num_evals(num_evals):
+    if HAS_PETSC and HAS_SLEPC:
+        pytest.skip("covered by numeric tests when PETSc/SLEPc are present")
+    with pytest.raises((ValueError, ImportError)):
+        backend.ed_petsc(operator_factory(object(), 'petsc'), num_evals=num_evals)
+
+
+def test_rixs_petsc_rejects_unknown_options_before_importing_petsc():
+    with pytest.raises(TypeError, match=r"not_a_real_option.*Allowed options"):
+        backend.rixs_petsc(
+            np.array([0.0]),
+            [object()],
+            object(),
+            object(),
+            [object()] * 3,
+            np.array([1.0]),
+            np.array([0.0]),
+            backend_kws={"not_a_real_option": 1},
+        )
 
 
 def test_public_symbols_are_exported():
     for name in (
-        "owns_operator_petsc",
         "build_op_petsc",
         "ed_petsc",
         "xas_petsc",
@@ -24,47 +80,190 @@ def test_public_symbols_are_exported():
         assert hasattr(backend, name)
 
 
-def test_build_op_stub_rejects_backend_options_until_implemented(monkeypatch):
-    """The PETSc stub has an explicit empty backend-option contract."""
-    monkeypatch.setattr(backend, "_petsc_module", lambda: object())
-    with pytest.raises(TypeError, match=r"petsc\.build_op.*Allowed options: none"):
-        backend.build_op_petsc(
-            None,
-            None,
-            object(),
-            use_numba=True,
-            backend_kws={"unused": True},
-        )
+# -----------------------------------------------------------------------------
+# Numeric PETSc tests
+# -----------------------------------------------------------------------------
 
 
-def test_build_op_stub_accepts_shared_non_backend_options(monkeypatch):
-    """Shared arguments still reach the intentionally unimplemented stub."""
-    monkeypatch.setattr(backend, "_petsc_module", lambda: object())
-    with pytest.raises(NotImplementedError, match="build_op_petsc"):
-        backend.build_op_petsc(None, None, object(), use_numba=True)
+def _petsc_dense_matrix(array):
+    from petsc4py import PETSc
+
+    array = np.asarray(array, dtype=complex)
+    size = array.shape[0]
+    matrix = PETSc.Mat().createAIJ((size, size), comm=PETSc.COMM_SELF)
+    matrix.setUp()
+    columns = np.arange(size, dtype=PETSc.IntType)
+    for row in range(size):
+        matrix.setValues(row, columns, array[row])
+    matrix.assemblyBegin()
+    matrix.assemblyEnd()
+    return matrix
 
 
-@pytest.mark.parametrize(
-    "call,operation",
-    [
-        (lambda: backend.ed_petsc(object()), "ed_petsc"),
-        (
-            lambda: backend.xas_petsc(
-                np.array([0.0]), [object()], object(), [object()] * 3,
-                np.array([1.0])
-            ),
-            "xas_petsc",
-        ),
-        (
-            lambda: backend.rixs_petsc(
-                np.array([0.0]), [object()], object(), object(),
-                [object()] * 3, np.array([1.0]), np.array([0.0])
-            ),
-            "rixs_petsc",
-        ),
-    ],
-)
-def test_solver_stubs_remain_unimplemented(monkeypatch, call, operation):
-    monkeypatch.setattr(backend, "_petsc_module", lambda: object())
-    with pytest.raises(NotImplementedError, match=operation):
-        call()
+def _petsc_vector(matrix, values):
+    from petsc4py import PETSc
+
+    vector = matrix.createVecRight()
+    indices = np.arange(len(values), dtype=PETSc.IntType)
+    vector.setValues(indices, np.asarray(values, dtype=complex))
+    vector.assemblyBegin()
+    vector.assemblyEnd()
+    return vector
+
+
+@requires_petsc
+@pytest.mark.parametrize('nkryl', [1, 3, 20])
+def test_petsc_lanczos_matches_scipy_lanczos_and_preserves_seed(nkryl):
+    """Backend-specific Lanczos implementations must produce the same projection."""
+    rng = np.random.default_rng(91)
+    raw = rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6))
+    hermitian = (raw + raw.conj().T) / 2
+    seed = rng.normal(size=6) + 1j * rng.normal(size=6)
+
+    matrix = _petsc_dense_matrix(hermitian)
+    vector = _petsc_vector(matrix, seed)
+    vector_before = vector.copy()
+
+    alpha_p, beta_p, norm_p = lanczos_petsc(matrix, vector, nkryl=nkryl)
+    alpha_s, beta_s, norm_s = lanczos_scipy(hermitian, seed, m=nkryl)
+
+    assert_allclose(alpha_p, alpha_s, rtol=0, atol=2e-12)
+    assert_allclose(beta_p, beta_s, rtol=0, atol=2e-12)
+    assert norm_p == pytest.approx(norm_s, abs=2e-12)
+    vector.axpy(-1.0, vector_before)
+    assert vector.norm() == pytest.approx(0.0, abs=1e-14)
+
+
+@requires_petsc
+def test_petsc_lanczos_eigenvector_seed_breaks_down_without_modifying_input():
+    matrix = _petsc_dense_matrix(np.diag([2., 3., 5.]))
+    vector = _petsc_vector(matrix, [0., 2., 0.])
+    try:
+        for _ in range(2):
+            alpha, beta, norm = lanczos_petsc(matrix, vector, nkryl=3)
+            assert_allclose(alpha, [3.], rtol=0, atol=0)
+            assert len(beta) == 0
+            assert norm == 4.
+            assert_allclose(vector.getArray(), [0., 2., 0.], rtol=0, atol=0)
+    finally:
+        vector.destroy()
+        matrix.destroy()
+
+
+@requires_petsc_slepc
+def test_public_ed_scipy_and_petsc_agree_on_constructed_operator():
+    """The two solver backends agree after constructing the same Fock operator."""
+    from petsc4py import PETSc
+
+    rng = np.random.default_rng(123)
+    raw = rng.normal(size=(4, 4)) + 1j * rng.normal(size=(4, 4))
+    emat = (raw + raw.conj().T) / 2
+    umat = np.zeros((4, 4, 4, 4), dtype=complex)
+    umat[0, 1, 1, 0] = 0.35
+    umat[1, 0, 0, 1] = 0.35
+    spec = FockBasisSpec.from_args(4, 2)
+
+    scipy_matrix = build_op(
+        emat,
+        umat,
+        spec,
+        backend="scipy",
+        basis_method="combinadic",
+        use_numba=False,
+    )()
+    petsc_matrix = build_op(
+        emat,
+        umat,
+        spec,
+        backend="petsc",
+        basis_method="combinadic",
+        use_numba=False,
+        backend_kws={"comm": PETSc.COMM_SELF},
+    )()
+
+    eval_s, _ = ed(operator_factory(scipy_matrix, "scipy"), num_evals=2)
+    eval_p, _ = ed(operator_factory(petsc_matrix, "petsc"), num_evals=2)
+
+    assert_allclose(eval_p, eval_s, rtol=0, atol=1e-8)
+
+
+@pytest.fixture
+def complex_hermitian_petsc_mat():
+    if not HAS_PETSC:
+        pytest.skip("petsc4py is required")
+    rng = np.random.default_rng(12345)
+    dense = rng.standard_normal((6, 6))
+    dense = dense + 1j * rng.standard_normal((6, 6))
+    hermitian = (dense + dense.conj().T) / 2
+    return _petsc_dense_matrix(hermitian), np.linalg.eigvalsh(hermitian)
+
+
+@requires_petsc_slepc
+def test_ed_petsc_returns_lowest_sorted_eigenpairs(complex_hermitian_petsc_mat):
+    mat, expected_eigenvalues = complex_hermitian_petsc_mat
+    evals, evecs = backend.ed_petsc(operator_factory(mat, 'petsc'), num_evals=3)
+
+    assert len(evals) == 3
+    assert len(evecs) == 3
+    assert_allclose(evals, expected_eigenvalues[:3], atol=1e-8)
+
+    residual = mat.createVecLeft()
+    for value, vector in zip(evals, evecs):
+        mat.mult(vector, residual)
+        residual.axpy(-value, vector)
+        assert residual.norm() < 1e-6
+
+
+@requires_petsc_slepc
+def test_ed_petsc_rejects_too_many_requested(complex_hermitian_petsc_mat):
+    mat, expected_eigenvalues = complex_hermitian_petsc_mat
+    with pytest.raises((RuntimeError, ValueError)):
+        backend.ed_petsc(operator_factory(mat, 'petsc'), num_evals=len(expected_eigenvalues) + 5)
+
+
+@requires_petsc
+def test_shifted_pminres_reuses_workspace_and_reports_true_residual():
+    from petsc4py import PETSc
+    from edrixs.petsc_backend.petsc_shifted_pminres import ShiftedPMINRES
+
+    dense = np.array([[1., .2j], [-.2j, 2.]], dtype=complex)
+    matrix = _petsc_dense_matrix(dense + .3j * np.eye(2))
+    rhs = _petsc_vector(matrix, [1j, 2.])
+    solution = rhs.duplicate()
+    context = ShiftedPMINRES()
+    ksp = PETSc.KSP().createPython(context, comm=PETSc.COMM_SELF)
+    try:
+        ksp.getPC().setType('none')
+        ksp.setOperators(matrix)
+        ksp.setTolerances(rtol=0, atol=1e-12, max_it=20)
+        handles = None
+        for shift in [0., .4, -.1]:
+            matrix.shift(shift)
+            dense += shift * np.eye(2)
+            ksp.solve(rhs, solution)
+            expected = np.linalg.solve(dense + .3j * np.eye(2), [1j, 2.])
+            assert_allclose(solution.getArray(), expected, atol=1e-12)
+            assert ksp.getConvergedReason() > 0
+            assert ksp.getResidualNorm() <= 1e-12
+            current = [v.handle for v in context._vectors]
+            if handles is not None:
+                assert current == handles
+            handles = current
+        rhs.set(0)
+        ksp.solve(rhs, solution)
+        assert solution.norm() == 0
+        assert ksp.getIterationNumber() == 0
+        assert ksp.getResidualNorm() == 0
+        ksp.setInitialGuessNonzero(True)
+        with pytest.raises(ValueError, match='zero initial guess'):
+            context.solve(ksp, rhs, solution)
+        ksp.setInitialGuessNonzero(False)
+        ksp.getPC().setType('jacobi')
+        with pytest.raises(ValueError, match='PCNONE'):
+            context.solve(ksp, rhs, solution)
+    finally:
+        ksp.destroy()
+        solution.destroy()
+        rhs.destroy()
+        matrix.destroy()
+    assert context._vectors == []

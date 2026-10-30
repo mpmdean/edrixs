@@ -1,6 +1,7 @@
 """Tests for compact Fock-basis metadata and interchangeable realizations."""
 
 import builtins
+import sys
 
 import numpy as np
 import pytest
@@ -89,6 +90,7 @@ def test_numba_default_requires_numba_and_allows_opt_out(monkeypatch, numba_opti
     emat = np.array([[1.0, 0.25], [0.25, -0.5]], dtype=complex)
 
     monkeypatch.setattr(operator_builder, "_NUMBA_KERNELS", None)
+    monkeypatch.delitem(sys.modules, "edrixs._numba_operator_kernels", raising=False)
     original_import = builtins.__import__
 
     def guarded_import(name, *args, **kwargs):
@@ -105,7 +107,7 @@ def test_numba_default_requires_numba_and_allows_opt_out(monkeypatch, numba_opti
         backend="scipy",
         basis_method="combinadic",
         use_numba=False,
-    )
+    )()
     np.testing.assert_allclose(operator.toarray(), emat)
 
     with pytest.raises(ImportError, match="use_numba=True requires numba"):
@@ -116,7 +118,7 @@ def test_numba_default_requires_numba_and_allows_opt_out(monkeypatch, numba_opti
             backend="scipy",
             basis_method="combinadic",
             **numba_options,
-        )
+        )()
 
 
 def test_little_endian_core_bits_and_bounds():

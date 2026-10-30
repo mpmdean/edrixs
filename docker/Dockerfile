@@ -58,11 +58,15 @@ RUN curl --fail --show-error --location --retry 3 \
 
 FROM dep_builder AS app_builder
 
+ENV PETSC_CONFIGURE_OPTIONS="--with-scalar-type=complex --with-precision=double"
+
 COPY --chown=docker docker/requirements.txt /tmp/edrixs-docker-requirements.txt
 RUN python -m pip install --no-cache-dir --upgrade \
       pip==26.2.1 setuptools==84.0.0 wheel==0.48.0 && \
   python -m pip install --no-cache-dir \
-      --requirement /tmp/edrixs-docker-requirements.txt
+      --requirement /tmp/edrixs-docker-requirements.txt && \
+  python -m pip install --no-cache-dir petsc petsc4py && \
+  python -m pip install --no-cache-dir slepc slepc4py numba
 
 COPY --chown=docker . edrixs
 

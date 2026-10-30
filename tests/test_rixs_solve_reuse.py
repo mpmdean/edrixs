@@ -1,4 +1,7 @@
-"""Numerical and solve-count checks for shared SciPy RIXS correction vectors."""
+"""Numerical and solve-count checks for shared RIXS correction vectors.
+
+The PETSc cases can also run with mpirun -n 2 python -m pytest on this file.
+"""
 
 import importlib
 from functools import wraps
@@ -9,6 +12,8 @@ import pytest
 
 import edrixs
 from edrixs._solvers_helpers import _group_rixs_incoming
+
+from operator_factories import operator_factory, operator_factories
 
 
 def test_incoming_groups_use_exact_coefficients_and_preserve_indices():
@@ -24,20 +29,102 @@ def test_incoming_groups_use_exact_coefficients_and_preserve_indices():
     assert _group_rixs_incoming([]) == []
 
 
-@pytest.fixture
-def runner(monkeypatch):
-    """Run SciPy on small reference problems and count real GMRES solves."""
-    backend = importlib.import_module('edrixs.scipy_backend.scipy_backend')
-    original = backend.gmres
-    counts = []
+@pytest.fixture(params=['scipy', 'petsc', 'shifted_pminres',
+                        'petsc_recompute', 'shifted_pminres_recompute'])
+def runner(request, monkeypatch):
+    """Run a small dense input problem through either backend; count real solves."""
+    if request.param == 'scipy':
+        backend = importlib.import_module('edrixs.scipy_backend.scipy_backend')
+        original = backend.gmres
+        counts = []
 
-    @wraps(original)
-    def counted(*args, **kwargs):
-        counts.append(1)
-        return original(*args, **kwargs)
+        @wraps(original)
+        def counted(*args, **kwargs):
+            counts.append(1)
+            return original(*args, **kwargs)
 
-    monkeypatch.setattr(backend, 'gmres', counted)
-    return backend.rixs_scipy, lambda: len(counts)
+        monkeypatch.setattr(backend, 'gmres', counted)
+
+        def run(energies, vectors, hi, hn, transitions, ominc, eloss, **kwargs):
+            return backend.rixs_scipy(
+                energies, vectors, operator_factory(hi), operator_factory(hn),
+                operator_factories(transitions), ominc, eloss, **kwargs,
+            )
+
+        return run, lambda: len(counts)
+
+    PETSc = pytest.importorskip('petsc4py.PETSc')
+    options = PETSc.Options()
+    saved = options.getAll()
+    options['pc_type'] = 'none'
+    options['ksp_rtol'] = 0.0
+
+    def restore_options():
+        for key in ('pc_type', 'ksp_rtol'):
+            if key in saved:
+                options[key] = saved[key]
+            else:
+                del options[key]
+
+    request.addfinalizer(restore_options)
+    PETSc.Log.begin()
+    stage = PETSc.Log.Stage('test_rixs_reuse')
+    event = PETSc.Log.Event('KSPSolve')
+    initial_count = event.getPerfInfo(stage.id)['count']
+
+    def run(energies, vectors, hi, hn, transitions, ominc, eloss, **kwargs):
+        if request.param.startswith('petsc'):
+            kwargs['backend_kws'] = dict(kwargs.get('backend_kws', {}),
+                                         ksp_type='gmres')
+        if request.param.endswith('_recompute'):
+            kwargs['backend_kws'] = dict(kwargs.get('backend_kws', {}),
+                                         matrix_lifetime='recompute')
+        objects = []
+
+        def matrix(array):
+            mat = PETSc.Mat().createAIJ(array.shape, comm=PETSc.COMM_WORLD)
+            objects.append(mat)
+            mat.setUp()
+            start, end = mat.getOwnershipRange()
+            columns = np.arange(array.shape[1], dtype=PETSc.IntType)
+            for row in range(start, end):
+                mat.setValues(row, columns, array[row])
+            mat.assemble()
+            return mat
+
+        try:
+            initial, intermediate = matrix(hi), matrix(hn)
+            ops = [matrix(t) for t in transitions]
+            states = []
+            for column in vectors.T:
+                state = initial.createVecRight()
+                objects.append(state)
+                start, end = state.getOwnershipRange()
+                state.getArray()[:] = column[start:end]
+                states.append(state)
+            originals = [state.getArray(readonly=True).copy() for state in states]
+            stage.push()
+            try:
+                result = edrixs.rixs(
+                    energies,
+                    states,
+                    operator_factory(initial, 'petsc'),
+                    operator_factory(intermediate, 'petsc'),
+                    operator_factories(ops, 'petsc'),
+                    ominc,
+                    eloss,
+                    **kwargs,
+                )
+            finally:
+                stage.pop()
+            for state, original in zip(states, originals):
+                assert_array_equal(state.getArray(readonly=True), original)
+            return result
+        finally:
+            for obj in reversed(objects):
+                obj.destroy()
+
+    return run, lambda: event.getPerfInfo(stage.id)['count'] - initial_count
 
 
 def problem(ntrans, degenerate=False):
@@ -68,7 +155,10 @@ def test_reuse_matches_single_channels_and_dense_reference(runner, ntrans, skip_
                         backend_kws=solver_options, **options)
     # Two energies x two initial states x two distinct incoming polarizations.
     assert solve_count() == 8
-    dense = edrixs.rixs(*args, pol_type=channels, backend='dense', **options)
+    dense_args = (*args[:2], operator_factory(args[2], 'dense'),
+                  operator_factory(args[3], 'dense'),
+                  operator_factories(args[4], 'dense'), *args[5:])
+    dense = edrixs.rixs(*dense_args, pol_type=channels, **options)
     assert_allclose(actual, dense, rtol=1e-8, atol=1e-9)
     for ip, channel in enumerate(channels):
         separate = run(*args, pol_type=[channel], backend_kws=solver_options, **options)

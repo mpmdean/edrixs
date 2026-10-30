@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 
 from edrixs.dense_backend import dense_backend
+from edrixs.dense_backend.options import OPTIONS as DENSE_OPTIONS
 from edrixs.fortran_backend import fortran_backend
 from edrixs.fortran_backend.options import OPTIONS as FORTRAN_OPTIONS
-from edrixs.dense_backend.options import OPTIONS as DENSE_OPTIONS
 from edrixs.petsc_backend.options import OPTIONS as PETSC_OPTIONS
 from edrixs.scipy_backend import scipy_backend
 from edrixs.scipy_backend.options import OPTIONS as SCIPY_OPTIONS
@@ -16,11 +16,11 @@ from edrixs.solvers import rixs_1v1c_fort, rixs_2v1c_fort, rixs_siam_fort
 
 
 def test_option_registries_cover_each_staged_operation():
-    assert set(DENSE_OPTIONS) == {'build_op', 'get_ops', 'ed', 'xas', 'rixs'}
     assert set(SCIPY_OPTIONS) == {'build_op', 'get_ops', 'ed', 'xas', 'rixs'}
     assert set(FORTRAN_OPTIONS) == {'get_ops', 'ed', 'xas', 'rixs'}
     assert set(PETSC_OPTIONS) == {'build_op', 'get_ops', 'ed', 'xas', 'rixs'}
-    assert all(not options for options in PETSC_OPTIONS.values())
+    assert all(PETSC_OPTIONS.values())
+    assert set(DENSE_OPTIONS) == {'build_op', 'get_ops', 'ed', 'xas', 'rixs'}
     assert not DENSE_OPTIONS['ed']
     assert not DENSE_OPTIONS['xas']
     assert not DENSE_OPTIONS['rixs']
@@ -77,6 +77,23 @@ def test_fortran_staged_rixs_uses_native_iteration_name():
             [], None, None, None, None, [], [],
             backend_kws={'linsys_maxiter': 10},
         )
+
+
+def test_petsc_staged_rixs_uses_standardized_iteration_name():
+    assert 'linsys_maxiter' in PETSC_OPTIONS['rixs']
+    assert 'linsys_max' not in PETSC_OPTIONS['rixs']
+
+    with pytest.raises(TypeError, match=r"linsys_max.*linsys_maxiter"):
+        from edrixs.petsc_backend.options import validate_options
+        validate_options('rixs', {'linsys_max': 10})
+
+
+@pytest.mark.parametrize('value,error', [(None, TypeError), (1, TypeError), ('COO', ValueError)])
+def test_petsc_rejects_invalid_assembly_method(value, error):
+    from edrixs.petsc_backend.options import validate_options
+
+    with pytest.raises(error, match='assembly_method'):
+        validate_options('build_op', {'assembly_method': value})
 
 
 def test_legacy_fortran_rixs_signatures_are_unchanged():
