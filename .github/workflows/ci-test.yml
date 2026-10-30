@@ -98,6 +98,14 @@ jobs:
           fi
           echo "EDRIXS_DOCS_VERSION=${docs_version}" >> $GITHUB_ENV
 
+      - name: Configure Open MPI transport for Linux runners
+        if: runner.os == 'Linux'
+        run: |
+          # Hosted runners can expose RDMA devices that UCX cannot use.
+          # Use Open MPI 5's local and TCP transports for this single-host job.
+          echo "OMPI_MCA_pml=ob1" >> "$GITHUB_ENV"
+          echo "OMPI_MCA_btl=self,sm,tcp" >> "$GITHUB_ENV"
+
       - name: Set MacOS Deployment Target
         if: runner.os == 'macOS'
         run: |
